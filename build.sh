@@ -12,7 +12,7 @@
 set -e
 
 BUILD_DIR=build
-BUILD_OP=""
+BUILD_OP=()
 RUN_TEST=OFF
 
 export BASE_PATH=$(
@@ -50,7 +50,11 @@ export EAGER_LIBRARY_PATH="${ASCEND_HOME_PATH}/lib64"
 for arg in "$@"; do
     case $arg in
         --op=*)
-            BUILD_OP="${arg#*=}"
+            IFS=',' read -ra op_array <<< "${arg#*=}"
+            for op in "${op_array[@]}"; do
+                op=$(echo "$op" | xargs)
+                [[ -n "$op" ]] && BUILD_OP+=("$op")
+            done
             ;;
         --run)
             RUN_TEST=ON
@@ -58,15 +62,37 @@ for arg in "$@"; do
         *)
             echo "Unknown option: $arg"
             echo "Usage:"
-            echo "  bash build.sh                                # 只编译库"
-            echo "  bash build.sh --op=cmatinv_batched           # 编译指定算子"
-            echo "  bash build.sh --op=cmatinv_batched --run     # 编译并运行算子"
+            echo "  bash build.sh                                      # 只编译库"
+            echo "  bash build.sh --op=cmatinv_batched                 # 编译指定算子"
+            echo "  bash build.sh --op=cmatinv_batched --run           # 编译并运行单个算子"
+            echo "  bash build.sh --op=cmatinv_batched,cgetri --run    # 编译并运行多个算子"
+            echo "  bash build.sh --run                                # 编译并运行所有算子"
             exit 1
             ;;
     esac
 done
 
-echo "BUILD_OP=${BUILD_OP}, RUN_TEST=${RUN_TEST}"
+if [[ "$RUN_TEST" == "ON" && ${#BUILD_OP[@]} -eq 0 ]]; then
+    TEST_DIR="./test"
+    [[ ! -d "$TEST_DIR" ]] && { echo "Error: test directory not found: $TEST_DIR" >&2; exit 1; }
+    
+    valid_ops=()
+    for dir in "$TEST_DIR"/*/; do
+        [[ -d "$dir" ]] || continue
+        [[ -f "${dir}/CMakeLists.txt" ]] || continue
+        op_name=$(basename "$dir")
+        [[ "$op_name" == "utils" ]] && continue
+        valid_ops+=("$op_name")
+    done
+
+    if [[ ${#valid_ops[@]} -eq 0 ]]; then
+        echo "Warning: No valid test directories found under $TEST_DIR" >&2
+    else
+        BUILD_OP=("${valid_ops[@]}")
+    fi
+fi
+
+echo "BUILD_OP=(${BUILD_OP[@]}), RUN_TEST=${RUN_TEST}"
 
 # ==========================
 # 构建
@@ -109,9 +135,10 @@ fi
 [ -n "${ASC_DIR}" ] && CMAKE_OPTIONS="${CMAKE_OPTIONS} -DASC_DIR=${ASC_DIR}"
 
 if [ -n "${BUILD_OP}" ]; then
-    CMAKE_OPTIONS="${CMAKE_OPTIONS} -DBUILD_TEST=ON -DTEST_NAME=${BUILD_OP}"
+    test_names_str=$(printf '%s;' "${BUILD_OP[@]}")
+    test_names_str=${test_names_str%;}
+    CMAKE_OPTIONS="${CMAKE_OPTIONS} -DBUILD_TEST=ON -DTEST_NAMES=${test_names_str}"
 fi
-
 
 cmake -B ${BUILD_DIR} ${CMAKE_OPTIONS}
 cmake --build ${BUILD_DIR} -j
@@ -123,16 +150,52 @@ cmake --install ${BUILD_DIR}
 # ==========================
 if [ "${RUN_TEST}" == "ON" ]; then
     if [ -z "${BUILD_OP}" ]; then
-        echo "Error: --run requires --op=<算子名>"
+        echo "Error: --run requires --op=<算子名或逗号分隔列表>"
         exit 1
     fi
 
-    TEST_BIN="${BUILD_DIR}/test/${BUILD_OP}/${BUILD_OP}_test"
-    if [ ! -f "${TEST_BIN}" ]; then
-        echo "Error: test binary not found: ${TEST_BIN}"
+    # 开始批量运行每个算子
+    SUCCESS_COUNT=0
+    TOTAL_COUNT=${#BUILD_OP[@]}
+    echo "Starting test execution for ${TOTAL_COUNT} operator(s)..."
+    for op in "${BUILD_OP[@]}"; do
+        echo "============ Running test for: $op ============"
+
+        TEST_BIN="${BUILD_DIR}/test/${op}/${op}_test"
+        GEN_SCRIPT="test/${op}/data/gen_data.py"
+        VERIFY_SCRIPT="test/${op}/data/verify_result.py"
+
+        if [ ! -f "${TEST_BIN}" ]; then
+            echo "Error: test binary not found: ${TEST_BIN}"
+            exit 1
+        fi
+
+        echo "step 1: generate test data..."
+        python3 "${GEN_SCRIPT}"
+        echo -e "\nstep 2: run ${op}_test..."
+        "$TEST_BIN"
+        echo -e "\nstep 3: verify result..."
+        if python3 "${VERIFY_SCRIPT}"; then
+            SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+        fi
+
+        # 清理临时数据（可选）
+        rm -rf "test/${op}/data/input" "test/${op}/data/output"
+
+        echo -e "Test for $op completed.\n"
+        echo "-------------------------------------------"
+    done
+
+    # 最终统计
+    echo "==============================================="
+    echo "Summary:"
+    echo "Total operators tested: ${TOTAL_COUNT}"
+    echo "Success count: ${SUCCESS_COUNT}"
+    echo "Fail count: $((TOTAL_COUNT - SUCCESS_COUNT))"
+    if [ $SUCCESS_COUNT -eq $TOTAL_COUNT ]; then
+        echo " √ All tests passed!"
+    else
+        echo " ❌ Some tests failed. Please check logs above."
         exit 1
     fi
-
-    echo "Running ${BUILD_OP}_test..."
-    "$TEST_BIN"
 fi

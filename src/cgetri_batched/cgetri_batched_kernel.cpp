@@ -16,7 +16,7 @@
 #ifndef CGETRI_BATCHED_MIX_H
 #define CGETRI_BATCHED_MIX_H
 
-#include "kernel/getri_custom.hpp"
+#include "../utils/kernel/c64/getri_custom.hpp"
 
 static constexpr uint32_t OFFSET_TWO = 2;
 static constexpr uint32_t OFFSET_THREE = 3;

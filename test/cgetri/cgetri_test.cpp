@@ -9,7 +9,7 @@
 */
 
 /*!
- * \file cmatinv_batched_test.cpp
+ * \file cgetri_test.cpp
  * \brief
  */
 
@@ -26,40 +26,30 @@
 #include "../utils/data_utils.h"
 #include "../utils/utils.h"
 
-int32_t main(int32_t argc, char *argv[])
-{
-    int deviceId, batchSize, n;
+int main(int argc, char **argv) {
+    int deviceId, M, N;
     deviceId = (argc>1) ? std::atoi(argv[1]) : 0;
-    batchSize = (argc>2) ? std::atoi(argv[2]) : 2;
-    n = (argc>3) ? std::atoi(argv[3]) : 3;
+    N = (argc>2) ? std::atoi(argv[2]) : 32;
+    M = N;
 
     CHECK_ACL(aclInit(nullptr));
     CHECK_ACL(aclrtSetDevice(deviceId));
     aclrtStream stream = nullptr;
     CHECK_ACL(aclrtCreateStream(&stream));
 
-    
-    size_t aMatrixFileSize = batchSize * n * n * sizeof(std::complex<float>);
+    int t = (std::min(M, N) + 15) / 16 * 16;
+    size_t aMatrixFileSize = M * N * sizeof(float) * 2;
 
     std::complex<float>* A;
     CHECK_ACL(aclrtMallocHost((void**)(&A), aMatrixFileSize));
-    ReadFile("./test/cmatinv_batched/data/input/A_gm.bin", aMatrixFileSize, A, aMatrixFileSize);
+    ReadFile("./test/cgetri/data/input/A_gm.bin", aMatrixFileSize, A, aMatrixFileSize);
 
-    std::vector<std::complex<float>> Ainv(batchSize * n * n, {-1.0f, -1.0f});
-    std::vector<int32_t> info(batchSize, 0);
+    int32_t *info;
 
-    std::cout << "------- input TensorInA -------" << std::endl;
-    printTensor(A, batchSize, n, n);
-    std::cout << "------- input TensorInAinv -------" << std::endl;
-    printTensor(Ainv.data(), batchSize, n, n);
+    auto ret = aclsolverCgetri(N, A, N, info, stream);
+    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverCgetri failed. ERROR: %d\n", ret); return ret);
 
-    auto ret = aclsolverCmatinvBatched(n, A, n, Ainv.data(), n, info.data(), batchSize, stream);
-    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverCmatinvBatched failed. ERROR: %d\n", ret); return ret);
-
-    std::cout << "------- output TensorInAinv -------" << std::endl;
-    printTensor(Ainv.data(), batchSize, n, n);
-
-    WriteFile("./test/cmatinv_batched/data/output/Ainv_gm.bin", Ainv.data(), aMatrixFileSize);
+    WriteFile("./test/cgetri/data/output/A_gm.bin", A, aMatrixFileSize);
 
     CHECK_ACL(aclrtFreeHost(A));
     CHECK_ACL(aclrtDestroyStream(stream));

@@ -107,7 +107,6 @@ public:
         MatAQueueReal.EnQue(matALocalReal);
         MatAQueueImag.EnQue(matALocalImag);
 
-        // Compute
         triangularLocalReal = triangularQueueReal.DeQue<T>();
         triangularLocalImag = triangularQueueImag.DeQue<T>();
         matALocalReal = MatAQueueReal.DeQue<T>();
@@ -283,7 +282,6 @@ __aicore__ inline void solveTrsm(SolveTrsm<T> &optrsm, CMatmulCustom<T> &opmm, i
     int bigBlockM = 0;
     int bigBlockOffsetA, bigBlockOffsetB, bigBlockOffsetC;
     for (int i = 1, offsetM = blockM, bigBlockOffsetM = 0; i < cnt; ++i, offsetM += blockM) {
-        // matmul
 #ifdef __DAV_C220_CUBE__
         int r = i % lim;
         if (r) {
@@ -323,7 +321,6 @@ __aicore__ inline void solveTrsm(SolveTrsm<T> &optrsm, CMatmulCustom<T> &opmm, i
             if (bigBlockTmp <= 0) continue;
             opmm.Process(bigBlockOffsetA, bigBlockOffsetB, bigBlockOffsetC, bigBlockTmp, N, bigBlockM);
         }
-        // TRSM
 #elif __DAV_C220_VEC__
         CrossCoreWaitFlag(0x1);
         optrsm.Process(offsetM);

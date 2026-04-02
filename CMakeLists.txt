@@ -12,6 +12,9 @@ cmake_minimum_required(VERSION 3.16.0)
 
 project(ops_solver VERSION 1.0.0)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # ========= 基本配置 =========
 if(NOT DEFINED SOC_VERSION OR SOC_VERSION STREQUAL "")
   set(SOC_VERSION ascend910b3)
@@ -43,7 +46,7 @@ find_package(ASC REQUIRED)
 set(ALL_SOLVER_SRC_FILES "")
 set(OPS_SOLVER ops_solver)
 
-add_subdirectory(solver)
+add_subdirectory(src)
 
 project(${OPS_SOLVER} LANGUAGES ASC CXX)
 

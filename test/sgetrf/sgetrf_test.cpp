@@ -9,7 +9,7 @@
 */
 
 /*!
- * \file cmatinv_batched_test.cpp
+ * \file sgetrf_test.cpp
  * \brief
  */
 
@@ -17,7 +17,6 @@
 #include <cstring>
 #include <iostream>
 #include <vector>
-#include <complex>
 #include <algorithm>
 #include <iterator>
 #include <cmath>
@@ -26,41 +25,36 @@
 #include "../utils/data_utils.h"
 #include "../utils/utils.h"
 
-int32_t main(int32_t argc, char *argv[])
-{
-    int deviceId, batchSize, n;
+int main(int argc, char **argv) {
+    int deviceId, M, N;
     deviceId = (argc>1) ? std::atoi(argv[1]) : 0;
-    batchSize = (argc>2) ? std::atoi(argv[2]) : 2;
-    n = (argc>3) ? std::atoi(argv[3]) : 3;
+    M = (argc>2) ? std::atoi(argv[2]) : 32;
+    N = (argc>3) ? std::atoi(argv[3]) : 32;
 
     CHECK_ACL(aclInit(nullptr));
     CHECK_ACL(aclrtSetDevice(deviceId));
     aclrtStream stream = nullptr;
     CHECK_ACL(aclrtCreateStream(&stream));
 
-    
-    size_t aMatrixFileSize = batchSize * n * n * sizeof(std::complex<float>);
+    size_t aMatrixFileSize = M * N * sizeof(float);
 
-    std::complex<float>* A;
+    float* A;
     CHECK_ACL(aclrtMallocHost((void**)(&A), aMatrixFileSize));
-    ReadFile("./test/cmatinv_batched/data/input/A_gm.bin", aMatrixFileSize, A, aMatrixFileSize);
+    ReadFile("./test/sgetrf/data/input/A_gm.bin", aMatrixFileSize, A, aMatrixFileSize);
 
-    std::vector<std::complex<float>> Ainv(batchSize * n * n, {-1.0f, -1.0f});
-    std::vector<int32_t> info(batchSize, 0);
+    int32_t *ipiv = new int32_t[std::min(M, N)];
+    int32_t *info;
 
-    std::cout << "------- input TensorInA -------" << std::endl;
-    printTensor(A, batchSize, n, n);
-    std::cout << "------- input TensorInAinv -------" << std::endl;
-    printTensor(Ainv.data(), batchSize, n, n);
+    auto ret = aclsolverSgetrf(M, N, A, N, ipiv, info, stream);
+    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverSgetrf failed. ERROR: %d\n", ret); return ret);
 
-    auto ret = aclsolverCmatinvBatched(n, A, n, Ainv.data(), n, info.data(), batchSize, stream);
-    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverCmatinvBatched failed. ERROR: %d\n", ret); return ret);
+    WriteFile("./test/sgetrf/data/output/A_gm.bin", A, aMatrixFileSize);
 
-    std::cout << "------- output TensorInAinv -------" << std::endl;
-    printTensor(Ainv.data(), batchSize, n, n);
+    // Write pivot information
+    std::vector<int32_t> ipivData(ipiv, ipiv + std::min(M, N));
+    WriteFile("./test/sgetrf/data/output/W_gm.bin", ipivData.data(), ipivData.size() * sizeof(int32_t));
 
-    WriteFile("./test/cmatinv_batched/data/output/Ainv_gm.bin", Ainv.data(), aMatrixFileSize);
-
+    delete[] ipiv;
     CHECK_ACL(aclrtFreeHost(A));
     CHECK_ACL(aclrtDestroyStream(stream));
     CHECK_ACL(aclrtResetDevice(deviceId));

@@ -77,13 +77,11 @@ public:
     {
         uint64_t matABlockOffset = offset_m * N;
         uint64_t matLBlockOffset = offset_m * M + offset_m;
-        // CopyIn
         LocalTensor<T> triangularLocalReal = triangularQueueReal.AllocTensor<T>();
         LocalTensor<T> triangularLocalImag = triangularQueueImag.AllocTensor<T>();
         LocalTensor<T> matALocalReal = MatAQueueReal.AllocTensor<T>();
         LocalTensor<T> matALocalImag = MatAQueueImag.AllocTensor<T>();
 
-        // copy L
         DataCopyParams copyParamsMatL {
             static_cast<uint16_t>(blockM),
             static_cast<uint16_t>(blockM / elementsPerBlock),
@@ -93,7 +91,6 @@ public:
         DataCopy(triangularLocalReal, lRealGlobal[matLBlockOffset], copyParamsMatL);
         DataCopy(triangularLocalImag, lImagGlobal[matLBlockOffset], copyParamsMatL);
 
-        // copy A
         DataCopyParams copyParamsMatA {
             static_cast<uint16_t>(blockM),
             static_cast<uint16_t>(blockN / elementsPerBlock),
@@ -108,7 +105,6 @@ public:
         MatAQueueReal.EnQue(matALocalReal);
         MatAQueueImag.EnQue(matALocalImag);
 
-        // Compute
         triangularLocalReal = triangularQueueReal.DeQue<T>();
         triangularLocalImag = triangularQueueImag.DeQue<T>();
         matALocalReal = MatAQueueReal.DeQue<T>();
@@ -151,7 +147,6 @@ public:
         MatAQueueReal.FreeTensor(matALocalReal);
         MatAQueueImag.FreeTensor(matALocalImag);
 
-        // CopyOut
         augLocalReal = augQueueReal.DeQue<T>();
         augLocalImag = augQueueImag.DeQue<T>();
         augLocalImagNeg = augQueueImagNeg.DeQue<T>();
@@ -171,8 +166,6 @@ public:
         augQueueImagNeg.FreeTensor(augLocalImagNeg);
     }
 };
-
-// Assert 16 | M, p * 16 | N
 __aicore__ inline void custom_trsm(TBufPool<TPosition::VECCALC, 16> &tbufPool, CMatmulCustom<float> &opmm, int M, int N, int strideN, int block_m, GM_ADDR A, GM_ADDR L)
 {
     int baseM = 128;
@@ -235,7 +228,6 @@ __aicore__ inline void custom_trsm(TBufPool<TPosition::VECCALC, 16> &tbufPool, C
     int big_block_offsetB;
     int big_block_offsetC;
     for (int i = 1, offset_m = block_m, big_block_offset_m = 0; i < cnt; ++i, offset_m += block_m) {
-        // matmul
 #ifdef __DAV_C220_CUBE__
         int r = i % lim;
         if (r) {
@@ -275,7 +267,6 @@ __aicore__ inline void custom_trsm(TBufPool<TPosition::VECCALC, 16> &tbufPool, C
             if (big_block_tmp <= 0) continue;
             opmm.Process(big_block_offsetA, big_block_offsetB, big_block_offsetC, big_block_tmp, realBlockN, big_block_m);
         }
-        // TRSM
 #elif __DAV_C220_VEC__
         CrossCoreWaitFlag(0x1);
         if (blockIdx % 2 <= doubleAIV) optrsm.Process(offset_m);

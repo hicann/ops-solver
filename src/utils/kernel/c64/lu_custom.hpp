@@ -100,14 +100,12 @@ public:
             int srcOffset = (offsetM + blockIdx * tileM) * N + offsetN;
             int dstOffset = (totolBlocks - 1 - blockIdx) * tileM;
 
-            // > 4096 need to do twice
             if (transposeM1) {
                 optranspose.Process1(srcOffset, dstOffset, transposeM1);
                 if (transposeM2) {
                     optranspose.Process1(srcOffset + 8 * tileM * N, dstOffset - 8 * tileM, transposeM2);
                 }
             }
-            // need all core sync
             CrossCoreSetFlag<0x0, PIPE_MTE3>(0x6);
             CrossCoreWaitFlag(0x6);
 
@@ -286,7 +284,5 @@ __aicore__ inline void custom_lu(TBufPool<TPosition::VECCALC, 16> &tbufPool, CMa
     }
 #endif
 }
-
-
 
 #endif  // _LU_CUSTOM_HPP_

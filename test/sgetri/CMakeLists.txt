@@ -8,12 +8,16 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
-if(BUILD_TEST)
-    foreach(TEST_NAME ${TEST_NAMES})
-        if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${TEST_NAME})
-            add_subdirectory(${TEST_NAME})
-        else()
-            message(FATAL_ERROR "TEST directory not found: ${TEST_NAME}")
-        endif()
-    endforeach()
-endif()
+add_executable(sgetri_test
+    sgetri_test.cpp
+)
+
+target_include_directories(sgetri_test PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    $ENV{LINUX_INCLUDE_PATH}
+)
+
+target_link_libraries(sgetri_test PRIVATE
+    ${OPS_SOLVER}
+    $ENV{EAGER_LIBRARY_PATH}/libascendcl.so
+)

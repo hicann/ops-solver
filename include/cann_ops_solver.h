@@ -17,12 +17,18 @@
 #include <cstdint>
 #include <complex>
 
-aclError aclsolverCmatinvBatched(const int64_t n, std::complex<float> *A,
-                                 const int64_t lda, std::complex<float> *Ainv,
-                                 const int64_t lda_inv, int32_t *info,
-                                 int64_t batchSize, void *stream);
+aclError aclsolverCmatinvBatched(const int64_t n, std::complex<float> *A, const int64_t lda, std::complex<float> *Ainv,
+                                 const int64_t lda_inv, int32_t *info, int64_t batchSize, void *stream);
 
-aclError aclsolverCgetriBatched(const int64_t n, std::complex<float> *A,
-                                const int64_t lda, std::complex<float> *Ainv,
-                                const int64_t lda_inv, int32_t *info,
-                                int64_t batchSize, void *stream);
+aclError aclsolverCgetriBatched(const int64_t n, std::complex<float> *A, const int64_t lda, std::complex<float> *Ainv,
+                                const int64_t lda_inv, int32_t *info, int64_t batchSize, void *stream);
+
+aclError aclsolverCgetri(const int64_t n, std::complex<float> *A, const int64_t lda, int32_t *info, void *stream);
+
+aclError aclsolverSgetri(const int64_t n, float *A, const int64_t lda, int32_t *info, void *stream);
+
+aclError aclsolverCgetrf(const int64_t m, const int64_t n, std::complex<float> *A, const int64_t lda, int32_t *ipiv,
+                         int32_t *info, void *stream);
+
+aclError aclsolverSgetrf(const int64_t m, const int64_t n, float *A, const int64_t lda, int32_t *ipiv, int32_t *info,
+                         void *stream);

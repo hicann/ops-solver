@@ -13,8 +13,8 @@
  * \brief
  */
 
-#ifndef _TRSM_UPPER_CUSTOM_HPP_
-#define _TRSM_UPPER_CUSTOM_HPP_
+#ifndef _CGETRF_TRSM_UPPER_CUSTOM_HPP_
+#define _CGETRF_TRSM_UPPER_CUSTOM_HPP_
 
 #include <cstdint>
 #include <cassert>
@@ -109,7 +109,6 @@ public:
         MatAQueueReal.EnQue(matALocalReal);
         MatAQueueImag.EnQue(matALocalImag);
 
-        // Compute
         triangularLocalReal = triangularQueueReal.DeQue<T>();
         triangularLocalImag = triangularQueueImag.DeQue<T>();
         matALocalReal = MatAQueueReal.DeQue<T>();
@@ -255,7 +254,6 @@ __aicore__ inline void custom_trsm_upper(TBufPool<TPosition::VECCALC, 16> &tbufP
     int big_block_offsetC;
     for (int i = 1, offset_m = M - block_m * 2, big_block_offset_m = M; i < cnt; ++i, offset_m -= block_m) {
 #ifdef __DAV_C220_CUBE__
-        // matmul
         int r = i % lim;
         if (r) {
             int offsetA = offset_m * strideN + offset_m + block_m;
@@ -296,7 +294,6 @@ __aicore__ inline void custom_trsm_upper(TBufPool<TPosition::VECCALC, 16> &tbufP
             opmm.Process(big_block_offsetA, big_block_offsetB, big_block_offsetC, big_block_tmp, realBlockN, big_block_m);
         }
 #elif __DAV_C220_VEC__
-        // TRSM
         CrossCoreWaitFlag(0x1);
         if (blockIdx % 2 <= doubleAIV) optrsm.Process(offset_m, block_m);
         if (i != cnt - 1) CrossCoreSetFlag<0x2, PIPE_MTE3>(0x0);
@@ -307,4 +304,4 @@ __aicore__ inline void custom_trsm_upper(TBufPool<TPosition::VECCALC, 16> &tbufP
 #endif
 }
 
-#endif  // _TRSM_UPPER_CUSTOM_HPP_d
+#endif  // _CGETRF_TRSM_UPPER_CUSTOM_HPP_

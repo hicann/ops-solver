@@ -9,7 +9,7 @@
 */
 
 /*!
- * \file cmatinv_batched.cpp
+ * \file cmatinv_batched_host.cpp
  * \brief
  */
 
