@@ -10,9 +10,43 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-file(GLOB_RECURSE ALL_SRC_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
+# 收集当前目录下的基础源文件
+file(GLOB BASE_SRC_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
+
+# 自动收集所有算子目录的源文件（支持子目录中的架构特定目录）
+set(OP_SRC_FILES "")
+file(GLOB children RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/*)
+foreach(child ${children})
+    if(IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${child})
+        # 递归收集非架构特定源码，避免与 archXX 目录重复收集
+        file(GLOB_RECURSE dir_srcs ${CMAKE_CURRENT_SOURCE_DIR}/${child}/*.cpp)
+        foreach(src_file ${dir_srcs})
+            set(is_arch_specific FALSE)
+            foreach(arch_dir ${ARCH_SPECIFIC_DIRS})
+                if(src_file MATCHES "/${arch_dir}/")
+                    set(is_arch_specific TRUE)
+                    break()
+                endif()
+            endforeach()
+            if(NOT is_arch_specific)
+                list(APPEND OP_SRC_FILES ${src_file})
+            endif()
+        endforeach()
+    endif()
+endforeach()
+
+# 收集子目录中的架构特定源文件
+set(ARCH_SRC_FILES "")
+foreach(arch_dir ${SOC_ARCH_DIRS})
+    file(GLOB_RECURSE arch_dir_srcs
+        ${CMAKE_CURRENT_SOURCE_DIR}/*/${arch_dir}/*.cpp
+    )
+    list(APPEND ARCH_SRC_FILES ${arch_dir_srcs})
+endforeach()
 
 set(ALL_SOLVER_SRC_FILES
-    ${ALL_SRC_FILES}
+    ${BASE_SRC_FILES}
+    ${OP_SRC_FILES}
+    ${ARCH_SRC_FILES}
     PARENT_SCOPE
 )

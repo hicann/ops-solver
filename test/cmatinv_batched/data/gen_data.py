@@ -38,14 +38,14 @@ for b in range(batchSize):
     inv_a[b] = np.linalg.inv(a[b]).astype(np.complex64)
 
 os.makedirs(os.path.dirname("./test/cmatinv_batched/data/input/A_gm.bin"), exist_ok=True)
-os.makedirs(os.path.dirname("./test/cmatinv_batched/data/output/golden.bin"), exist_ok=True)
+os.makedirs(os.path.dirname("./test/cmatinv_batched/data/golden/Ainv_gm.bin"), exist_ok=True)
 
 # 写入输入数据 (原始矩阵)
 with open("./test/cmatinv_batched/data/input/A_gm.bin", "wb") as f:
     f.write(a.tobytes())
 
 # 写入输出数据 (逆矩阵)
-with open("./test/cmatinv_batched/data/output/golden.bin", "wb") as f:
+with open("./test/cmatinv_batched/data/golden/Ainv_gm.bin", "wb") as f:
     f.write(inv_a.tobytes())
 
 # 可选：打印矩阵形状和部分数据用于验证

@@ -61,10 +61,19 @@ int32_t main(int32_t argc, char *argv[])
 
     WriteFile("./test/cmatinv_batched/data/output/Ainv_gm.bin", Ainv.data(), aMatrixFileSize);
 
+    // 读取 golden 数据进行对比
+    std::vector<std::complex<float>> goldenAinv(batchSize * n * n);
+    ReadFile("./test/cmatinv_batched/data/golden/Ainv_gm.bin", aMatrixFileSize, goldenAinv.data(), aMatrixFileSize);
+
+    bool passed = allclose(goldenAinv.data(), Ainv.data(), batchSize * n * n, 1e-4f, 1e-4f);
+    if (!passed) {
+        printf("judge not equal\n");
+    }
+
     CHECK_ACL(aclrtFreeHost(A));
     CHECK_ACL(aclrtDestroyStream(stream));
     CHECK_ACL(aclrtResetDevice(deviceId));
     CHECK_ACL(aclFinalize());
 
-    return 0;
+    return passed ? 0 : 1;
 }

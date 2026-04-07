@@ -12,19 +12,34 @@
 set -e
 
 BUILD_DIR=build
-BUILD_OP=()
+BUILD_OPS=""
 RUN_TEST=OFF
+ENABLE_PACKAGE=FALSE
 
 export BASE_PATH=$(
   cd "$(dirname $0)"
   pwd
 )
+export BUILD_PATH="${BASE_PATH}/build"
+export BUILD_OUT_PATH="${BASE_PATH}/build_out"
+CANN_3RD_LIB_PATH="${BUILD_PATH}/third_party"
 
 ARCH_INFO=$(uname -m)
 
-# 支持的 SOC 版本 "ascend910_93" "ascend910b" "ascend950" "ascend310p"
+# 分隔线和错误打印函数（参考 ops-blas build.sh）
+dotted_line="----------------------------------------------------------------"
+print_error() {
+  echo
+  echo $dotted_line
+  local msg="$1"
+  echo -e "\033[31m[ERROR] ${msg}\033[0m"
+  echo $dotted_line
+  echo
+}
+
+# 支持的 SOC 版本
 # 按字符串长度从长到短排序，避免前缀匹配时出错
-SUPPORT_COMPUTE_UNIT_SHORT=("ascend910b")
+SUPPORT_COMPUTE_UNIT_SHORT=("ascend910_93" "ascend910b" "ascend950" "ascend310p")
 SUPPORT_COMPUTE_UNIT_SHORT=($(printf '%s\n' "${SUPPORT_COMPUTE_UNIT_SHORT[@]}" | awk '{print length($0) " " $0}' | sort -rn | cut -d ' ' -f2-))
 
 # ==========================
@@ -49,50 +64,59 @@ export EAGER_LIBRARY_PATH="${ASCEND_HOME_PATH}/lib64"
 # ==========================
 for arg in "$@"; do
     case $arg in
-        --op=*)
-            IFS=',' read -ra op_array <<< "${arg#*=}"
-            for op in "${op_array[@]}"; do
-                op=$(echo "$op" | xargs)
-                [[ -n "$op" ]] && BUILD_OP+=("$op")
-            done
+        --ops=*)
+            BUILD_OPS="${arg#*=}"
             ;;
         --run)
             RUN_TEST=ON
+            ;;
+        --soc=*)
+            SOC_VERSION="${arg#*=}"
+            ;;
+        --pkg)
+            ENABLE_PACKAGE=TRUE
             ;;
         *)
             echo "Unknown option: $arg"
             echo "Usage:"
             echo "  bash build.sh                                      # 只编译库"
-            echo "  bash build.sh --op=cmatinv_batched                 # 编译指定算子"
-            echo "  bash build.sh --op=cmatinv_batched --run           # 编译并运行单个算子"
-            echo "  bash build.sh --op=cmatinv_batched,cgetri --run    # 编译并运行多个算子"
-            echo "  bash build.sh --run                                # 编译并运行所有算子"
+            echo "  bash build.sh --ops=cmatinv_batched                # 编译指定算子"
+            echo "  bash build.sh --ops=op1,op2                        # 编译多个算子（逗号分隔）"
+            echo "  bash build.sh --run                                # 编译并运行全部 test"
+            echo "  bash build.sh --ops=cmatinv_batched --run          # 编译并运行指定算子测试"
+            echo "  bash build.sh --pkg                                # 编译并打包 run 包"
+            echo "  bash build.sh --pkg --soc=ascend950                # 打包指定 SOC 的 run 包"
             exit 1
             ;;
     esac
 done
 
-if [[ "$RUN_TEST" == "ON" && ${#BUILD_OP[@]} -eq 0 ]]; then
-    TEST_DIR="./test"
-    [[ ! -d "$TEST_DIR" ]] && { echo "Error: test directory not found: $TEST_DIR" >&2; exit 1; }
-    
-    valid_ops=()
-    for dir in "$TEST_DIR"/*/; do
-        [[ -d "$dir" ]] || continue
-        [[ -f "${dir}/CMakeLists.txt" ]] || continue
-        op_name=$(basename "$dir")
-        [[ "$op_name" == "utils" ]] && continue
-        valid_ops+=("$op_name")
-    done
-
-    if [[ ${#valid_ops[@]} -eq 0 ]]; then
-        echo "Warning: No valid test directories found under $TEST_DIR" >&2
-    else
-        BUILD_OP=("${valid_ops[@]}")
-    fi
+# 校验 --run 和 --pkg 不能同时使用
+if [ "${RUN_TEST}" == "ON" ] && [ "${ENABLE_PACKAGE}" == "TRUE" ]; then
+  print_error "--run cannot be used with --pkg"
+  exit 1
 fi
 
-echo "BUILD_OP=(${BUILD_OP[@]}), RUN_TEST=${RUN_TEST}"
+# --run 且未指定 --ops：默认包含 test 下所有含 CMakeLists.txt 的算子子目录
+if [ "${RUN_TEST}" == "ON" ] && [ -z "${BUILD_OPS}" ]; then
+    TEST_OP_LIST=()
+    shopt -s nullglob
+    for d in "${BASE_PATH}/test"/*/; do
+        [ -d "$d" ] || continue
+        name=$(basename "$d")
+        if [ -f "${d}/CMakeLists.txt" ]; then
+            TEST_OP_LIST+=("$name")
+        fi
+    done
+    shopt -u nullglob
+    if [ ${#TEST_OP_LIST[@]} -eq 0 ]; then
+        print_error "No tests found under test/ (expected test/<op>/CMakeLists.txt)"
+        exit 1
+    fi
+    BUILD_OPS=$(printf '%s\n' "${TEST_OP_LIST[@]}" | sort | paste -sd, -)
+fi
+
+echo "BUILD_OPS=${BUILD_OPS}, RUN_TEST=${RUN_TEST}, ENABLE_PACKAGE=${ENABLE_PACKAGE}"
 
 # ==========================
 # 构建
@@ -134,49 +158,66 @@ if [ -z "${ASC_DIR}" ]; then
 fi
 [ -n "${ASC_DIR}" ] && CMAKE_OPTIONS="${CMAKE_OPTIONS} -DASC_DIR=${ASC_DIR}"
 
-if [ -n "${BUILD_OP}" ]; then
-    test_names_str=$(printf '%s;' "${BUILD_OP[@]}")
-    test_names_str=${test_names_str%;}
-    CMAKE_OPTIONS="${CMAKE_OPTIONS} -DBUILD_TEST=ON -DTEST_NAMES=${test_names_str}"
+if [ -n "${BUILD_OPS}" ]; then
+    # 将逗号分隔转换为分号分隔（CMake 列表格式）
+    TEST_NAMES_CMAKE="${BUILD_OPS//,/;}"
+    CMAKE_OPTIONS="${CMAKE_OPTIONS} -DBUILD_TEST=ON -DTEST_NAMES=${TEST_NAMES_CMAKE}"
+fi
+
+if [ "${ENABLE_PACKAGE}" == "TRUE" ]; then
+    CMAKE_OPTIONS="${CMAKE_OPTIONS} -DENABLE_PACKAGE=ON -DCANN_3RD_LIB_PATH=${CANN_3RD_LIB_PATH}"
 fi
 
 cmake -B ${BUILD_DIR} ${CMAKE_OPTIONS}
 cmake --build ${BUILD_DIR} -j
-cmake --install ${BUILD_DIR}
+if [ "${ENABLE_PACKAGE}" == "TRUE" ]; then
+    cmake --build ${BUILD_DIR} --target package
+else
+    cmake --install ${BUILD_DIR}
+fi
 
 
 # ==========================
 # 运行算子测试
 # ==========================
 if [ "${RUN_TEST}" == "ON" ]; then
-    if [ -z "${BUILD_OP}" ]; then
-        echo "Error: --run requires --op=<算子名或逗号分隔列表>"
-        exit 1
-    fi
+    # 将逗号分隔的算子名转换为数组
+    IFS=',' read -ra OP_ARRAY <<< "${BUILD_OPS}"
 
-    # 开始批量运行每个算子
-    SUCCESS_COUNT=0
-    TOTAL_COUNT=${#BUILD_OP[@]}
-    echo "Starting test execution for ${TOTAL_COUNT} operator(s)..."
-    for op in "${BUILD_OP[@]}"; do
-        echo "============ Running test for: $op ============"
+    FAILED_OPS=()
+    PASSED_OPS=()
 
+    for op in "${OP_ARRAY[@]}"; do
         TEST_BIN="${BUILD_DIR}/test/${op}/${op}_test"
         GEN_SCRIPT="test/${op}/data/gen_data.py"
         VERIFY_SCRIPT="test/${op}/data/verify_result.py"
 
+        echo ""
+        echo "========== Running ${op}_test =========="
+
         if [ ! -f "${TEST_BIN}" ]; then
-            echo "Error: test binary not found: ${TEST_BIN}"
-            exit 1
+            echo "[ERROR] Test binary not found: ${TEST_BIN}"
+            FAILED_OPS+=("${op}")
+            continue
         fi
 
         echo "step 1: generate test data..."
         python3 "${GEN_SCRIPT}"
+
         echo -e "\nstep 2: run ${op}_test..."
-        "$TEST_BIN"
+        # 临时禁用 errexit 以捕获测试退出码
+        set +e
+        "${TEST_BIN}"
+        exit_code=$?
+        set -e
+
         echo -e "\nstep 3: verify result..."
-        if python3 "${VERIFY_SCRIPT}"; then
-            SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+        if python3 "${VERIFY_SCRIPT}" && [ $exit_code -eq 0 ]; then
+            echo "[PASS] ${op}_test"
+            PASSED_OPS+=("${op}")
+        else
+            echo "[FAIL] ${op}_test"
+            FAILED_OPS+=("${op}")
         fi
 
         # 清理临时数据（可选）
@@ -186,16 +227,15 @@ if [ "${RUN_TEST}" == "ON" ]; then
         echo "-------------------------------------------"
     done
 
-    # 最终统计
-    echo "==============================================="
-    echo "Summary:"
-    echo "Total operators tested: ${TOTAL_COUNT}"
-    echo "Success count: ${SUCCESS_COUNT}"
-    echo "Fail count: $((TOTAL_COUNT - SUCCESS_COUNT))"
-    if [ $SUCCESS_COUNT -eq $TOTAL_COUNT ]; then
-        echo " √ All tests passed!"
-    else
-        echo " ❌ Some tests failed. Please check logs above."
+    # 汇总测试结果
+    echo ""
+    echo "========================================"
+    echo "Test Summary:"
+    echo "  Passed: ${#PASSED_OPS[@]} - ${PASSED_OPS[*]}"
+    echo "  Failed: ${#FAILED_OPS[@]} - ${FAILED_OPS[*]}"
+    echo "========================================"
+
+    if [ ${#FAILED_OPS[@]} -gt 0 ]; then
         exit 1
     fi
 fi

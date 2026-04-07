@@ -40,7 +40,7 @@ source ${HOME}/Ascend/ascend-toolkit/set_env.sh
     编译加速库，设置加速库环境变量：
     ```sh
     cd ops-solver
-    bash build.sh --op=cmatinv_batched --run # --op=<算子名> --run可选参数，执行测试样例
+    bash build.sh --ops=cmatinv_batched --run  # --ops=<算子名> --run可选参数，执行测试样例
 
 ## 📂目录结构
 ops-solver库的目录结构如下：

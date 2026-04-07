@@ -26,18 +26,44 @@ if(SOC_VERSION_LOWER MATCHES "^ascend910b")
 elseif(SOC_VERSION_LOWER MATCHES "^ascend910_93")
   set(NPU_ARCH "dav-2201")
 elseif(SOC_VERSION_LOWER MATCHES "^ascend950")
-  set(NPU_ARCH "dav-3101")
+  set(NPU_ARCH "dav-3510")
 elseif(SOC_VERSION_LOWER MATCHES "^ascend310p")
-  set(NPU_ARCH "dav-1101")
+  set(NPU_ARCH "dav-2002")
 else()
   message(FATAL_ERROR "Unsupported SOC_VERSION: ${SOC_VERSION}. Supported: ascend910b*, ascend910_93*, ascend950*, ascend310p*")
 endif()
 message(STATUS "SOC_VERSION=${SOC_VERSION}, NPU_ARCH=${NPU_ARCH}")
 
+# ========= SOC 架构目录配置 =========
+# 根据 SOC 返回需要编译的架构目录列表
+function(get_soc_arch_dirs soc_version arch_dirs)
+  string(TOLOWER "${soc_version}" soc_lower)
+  set(dirs "")
+
+  if(soc_lower MATCHES "^ascend950")
+    list(APPEND dirs "arch35")
+  elseif(soc_lower MATCHES "^ascend310p")
+    list(APPEND dirs "arch20")
+  endif()
+  # 其他 SOC 可以根据需要添加
+
+  set(${arch_dirs} ${dirs} PARENT_SCOPE)
+endfunction()
+
+# 获取当前 SOC 对应的架构目录
+get_soc_arch_dirs(${SOC_VERSION} SOC_ARCH_DIRS)
+message(STATUS "SOC_ARCH_DIRS=${SOC_ARCH_DIRS}")
+
+# 架构特定目录列表（全局定义）
+set(ARCH_SPECIFIC_DIRS arch35 arch20 CACHE INTERNAL "Architecture specific directories")
+
 set(ASCEND_CANN_PACKAGE_PATH $ENV{ASCEND_HOME_PATH})
 set(RUN_MODE "npu" CACHE STRING "run mode: npu")
 set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type Release/Debug" FORCE)
-set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_LIST_DIR}/out" CACHE STRING "install path" FORCE)
+set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_LIST_DIR}/build_out" CACHE STRING "install path" FORCE)
+
+# 外部传参
+option(ENABLE_PACKAGE "Enable build package" OFF)
 
 # ========= 构建动态库 =========
 find_package(ASC REQUIRED)
@@ -86,4 +112,10 @@ install(FILES
 option(BUILD_TEST "Build test programs" OFF)
 if(BUILD_TEST)
     add_subdirectory(test)
+endif()
+
+if(ENABLE_PACKAGE)
+    include(cmake/package.cmake)
+    add_dependencies(${OPS_SOLVER} gen_ops_solver_version_info)
+    pack(${SOC_VERSION})
 endif()
