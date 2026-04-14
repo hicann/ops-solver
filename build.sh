@@ -221,7 +221,7 @@ if [ "${RUN_TEST}" == "ON" ]; then
         fi
 
         # 清理临时数据（可选）
-        rm -rf "test/${op}/data/input" "test/${op}/data/output"
+        rm -rf "test/${op}/data/input" "test/${op}/data/output" "test/${op}/data/golden"
 
         echo -e "Test for $op completed.\n"
         echo "-------------------------------------------"

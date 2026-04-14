@@ -119,7 +119,7 @@
     使用内核调用符<<<>>>调用核函数。
 
 ## 调用示例
-- 完整代码示例：[aclsolverCmatinvBatched批量矩阵求逆示例](../test/cmatinv_batched/cmatinv_batched_test.cpp)
+- 完整代码示例：[aclsolverCmatinvBatched批量矩阵求逆示例](../../test/cmatinv_batched/cmatinv_batched_test.cpp)
 - 核心调用步骤：
 
     ```

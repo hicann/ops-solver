@@ -72,7 +72,7 @@ aclError aclsolverCgetrf(const int64_t m, const int64_t n, std::complex<float> *
                          int32_t *ipiv, int32_t *info, void *stream) {
     // Get current device ID
     int32_t deviceId = 0;
-    aclError aclRet = aclrtGetDevice(&deviceId);
+    CHECK_ACLRT(aclrtGetDevice(&deviceId));
     auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
     uint32_t numBlocks = 0;
     if (ascendcPlatform != nullptr) {

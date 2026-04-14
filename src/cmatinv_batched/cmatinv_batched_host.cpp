@@ -112,7 +112,7 @@ aclError aclsolverCmatinvBatched(const int64_t n, std::complex<float> *A,
 
     // Get current device ID
     int32_t deviceId = 0;
-    aclError aclRet = aclrtGetDevice(&deviceId);
+    CHECK_ACLRT(aclrtGetDevice(&deviceId));
     
     auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
     uint32_t numBlocks = 0;
