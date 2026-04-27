@@ -83,15 +83,16 @@ set_source_files_properties(
     PROPERTIES LANGUAGE ASC
 )
 
-target_include_directories(${OPS_SOLVER} PRIVATE
+target_include_directories(${OPS_SOLVER} BEFORE PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/include
     ${ASCEND_CANN_PACKAGE_PATH}/pkg_inc/op_common/
     ${ASCEND_CANN_PACKAGE_PATH}/pkg_inc/base/
     ${ASCEND_CANN_PACKAGE_PATH}/pkg_inc/
-    ./include
 )
 
 target_compile_options(${OPS_SOLVER} PRIVATE
     $<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>
+    $<$<COMPILE_LANGUAGE:ASC>:-iquote${CMAKE_CURRENT_LIST_DIR}/include>
 )
 
 target_link_libraries(${OPS_SOLVER} PRIVATE
@@ -105,6 +106,7 @@ install(TARGETS ${OPS_SOLVER}
 )
 install(FILES
     include/cann_ops_solver.h
+    include/cann_ops_solver_common.h
     DESTINATION include
 )
 

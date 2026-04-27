@@ -207,7 +207,8 @@ if [ "${RUN_TEST}" == "ON" ]; then
         echo -e "\nstep 2: run ${op}_test..."
         # 临时禁用 errexit 以捕获测试退出码
         set +e
-        "${TEST_BIN}"
+        # 优先加载本地编译的 ops_solver 库，避免与系统安装的版本冲突
+        LD_LIBRARY_PATH="${BUILD_PATH}:${LD_LIBRARY_PATH}" "${TEST_BIN}"
         exit_code=$?
         set -e
 
