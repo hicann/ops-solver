@@ -28,6 +28,7 @@ os.makedirs(os.path.dirname("./test/sgetrf/data/input/A_gm.bin"), exist_ok=True)
 with open("./test/sgetrf/data/input/A_gm.bin", "wb") as f:
     f.write(a.tobytes())
 
-# 可选：打印矩阵形状和部分数据用于验证
 print(f"Generated {m}x{n} float matrix")
-print("Input matrix (first 3x3):\n", a[:3, :3])
+
+# # 可选：打印矩阵形状和部分数据用于验证
+# print("Input matrix (first 3x3):\n", a[:3, :3])

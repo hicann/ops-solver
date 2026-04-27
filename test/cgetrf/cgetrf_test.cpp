@@ -43,13 +43,16 @@ int main(int argc, char **argv) {
     CHECK_ACL(aclrtMallocHost((void**)(&A), aMatrixFileSize));
     ReadFile("./test/cgetrf/data/input/A_gm.bin", aMatrixFileSize, A, aMatrixFileSize);
 
+    std::cout << "[Input] A:" << std::endl;
+    PrintPartOfMatrix<float>((uint8_t *)A, M, N, 8, 8);
+
     int32_t *ipiv = new int32_t[std::min(M, N)];
     int32_t *info;
 
     auto ret = aclsolverCgetrf(M, N, A, N, ipiv, info, stream);
     CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverCgetrf failed. ERROR: %d\n", ret); return ret);
 
-    std::cout << "[MATRIX X]" << std::endl;
+    std::cout << "[Output] A (LU):" << std::endl;
     PrintPartOfMatrix<float>((uint8_t *)A, M, N, 8, 8);
 
     WriteFile("./test/cgetrf/data/output/A_gm.bin", A, aMatrixFileSize);

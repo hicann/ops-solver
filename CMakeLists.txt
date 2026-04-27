@@ -17,7 +17,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ========= 基本配置 =========
 if(NOT DEFINED SOC_VERSION OR SOC_VERSION STREQUAL "")
-  set(SOC_VERSION ascend910b3)
+  set(SOC_VERSION ascend910b)
 endif()
 string(TOLOWER "${SOC_VERSION}" SOC_VERSION_LOWER)
 # SOC_VERSION -> NPU_ARCH 映射（ascend910b->dav-2201, ascend950->dav-3101）

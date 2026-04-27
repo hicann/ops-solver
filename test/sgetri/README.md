@@ -92,8 +92,7 @@ Solver Sgetri算子实现。
     </table>
 
 
-- 算子约束：
-  - 无。
+- 算子约束：无。
 
 - 调用实现
     使用内核调用符<<<>>>调用核函数。
@@ -120,7 +119,7 @@ Solver Sgetri算子实现。
 
 - 样例执行
   ```bash
-  bash build.sh --op=sgetri --run # --op=<算子名> --run可选参数，执行测试样例
+  bash build.sh --ops=sgetri --run # --ops=<算子名> --run可选参数，执行测试样例
   ```
   执行结果如下，说明精度对比成功。
   ```bash

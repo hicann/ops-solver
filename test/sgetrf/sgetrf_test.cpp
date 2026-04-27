@@ -42,11 +42,17 @@ int main(int argc, char **argv) {
     CHECK_ACL(aclrtMallocHost((void**)(&A), aMatrixFileSize));
     ReadFile("./test/sgetrf/data/input/A_gm.bin", aMatrixFileSize, A, aMatrixFileSize);
 
+    std::cout << "[Input] A:" << std::endl;
+    PrintPartOfMatrix<float>((uint8_t *)A, M, N, 8, 8);
+
     int32_t *ipiv = new int32_t[std::min(M, N)];
     int32_t *info;
 
     auto ret = aclsolverSgetrf(M, N, A, N, ipiv, info, stream);
     CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverSgetrf failed. ERROR: %d\n", ret); return ret);
+
+    std::cout << "[Output] A (LU):" << std::endl;
+    PrintPartOfMatrix<float>((uint8_t *)A, M, N, 8, 8);
 
     WriteFile("./test/sgetrf/data/output/A_gm.bin", A, aMatrixFileSize);
 

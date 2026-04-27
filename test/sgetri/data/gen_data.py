@@ -44,19 +44,20 @@ with open("./test/sgetri/data/input/A_gm.bin", "wb") as f:
 with open("./test/sgetri/data/output/golden.bin", "wb") as f:
     f.write(inv_a.tobytes())
 
-# 可选：打印矩阵形状和部分数据用于验证
 print(f"Generated {n}x{n} float matrix and its inverse")
-print("Input matrix (first 3x3):\n", a[:3, :3])
-print("Inverse matrix (first 3x3):\n", inv_a[:3, :3])
 
-product = np.matmul(a, inv_a)
-identity = np.eye(n, dtype=np.float32)
+# # 可选：打印矩阵形状和部分数据用于验证
+# print("Input matrix (first 3x3):\n", a[:3, :3])
+# print("Inverse matrix (first 3x3):\n", inv_a[:3, :3])
 
-# 计算误差
-abs_error = np.abs(product - identity)
-max_error = np.max(abs_error)
-mean_error = np.mean(abs_error)
-print("Verification results:")
-print(f"Max absolute error: {max_error:.3e}")
-print(f"Mean absolute error: {mean_error:.3e}")
-print("Product of A and inv(A) (first 3x3):\n", product[:3, :3])
+# product = np.matmul(a, inv_a)
+# identity = np.eye(n, dtype=np.float32)
+
+# # 计算误差
+# abs_error = np.abs(product - identity)
+# max_error = np.max(abs_error)
+# mean_error = np.mean(abs_error)
+# print("Verification results:")
+# print(f"Max absolute error: {max_error:.3e}")
+# print(f"Mean absolute error: {mean_error:.3e}")
+# print("Product of A and inv(A) (first 3x3):\n", product[:3, :3])

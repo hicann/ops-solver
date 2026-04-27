@@ -79,6 +79,10 @@ aclError aclsolverCgetrf(const int64_t m, const int64_t n, std::complex<float> *
         numBlocks = ascendcPlatform->GetCoreNumAic();
     }
 
+    if (numBlocks > 20) {
+        numBlocks = 20;
+    }
+
     int M, N, blockDim, blockN, blockM, tileM;
     M = m;
     N = n;

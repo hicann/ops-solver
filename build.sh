@@ -126,7 +126,7 @@ mkdir -p ${BUILD_DIR}
 
 # 默认 SOC_VERSION，ASCEND_CANN_PACKAGE_PATH 使用环境变量
 if [ -z "${SOC_VERSION}" ]; then
-    SOC_VERSION="ascend910b3"
+    SOC_VERSION="ascend910b"
 fi
 
 # 校验 SOC 是否在支持列表中（前缀匹配）

@@ -48,20 +48,22 @@ with open("./test/cmatinv_batched/data/input/A_gm.bin", "wb") as f:
 with open("./test/cmatinv_batched/data/golden/Ainv_gm.bin", "wb") as f:
     f.write(inv_a.tobytes())
 
-# 可选：打印矩阵形状和部分数据用于验证
 print(f"Generated batch {batchSize} of {n}x{n} complex matrices and their inverses")
-print("Input matrix batch 0 (first 3x3):\n", a[0, :3, :3])
-print("Inverse matrix batch 0 (first 3x3):\n", inv_a[0, :3, :3])
 
-# 验证第一个batch
-product = np.matmul(a[0], inv_a[0])
-identity = np.eye(n, dtype=np.complex64)
 
-# 计算误差
-abs_error = np.abs(product - identity)
-max_error = np.max(abs_error)
-mean_error = np.mean(abs_error)
-print("Verification results for batch 0:")
-print(f"Max absolute error: {max_error:.3e}")
-print(f"Mean absolute error: {mean_error:.3e}")
-print("Product of A and inv(A) (first 3x3):\n", product[:3, :3])
+# # 可选：打印矩阵形状和部分数据用于验证
+# print("Input matrix batch 0 (first 3x3):\n", a[0, :3, :3])
+# print("Inverse matrix batch 0 (first 3x3):\n", inv_a[0, :3, :3])
+
+# # 验证第一个batch
+# product = np.matmul(a[0], inv_a[0])
+# identity = np.eye(n, dtype=np.complex64)
+
+# # 计算误差
+# abs_error = np.abs(product - identity)
+# max_error = np.max(abs_error)
+# mean_error = np.mean(abs_error)
+# print("Verification results for batch 0:")
+# print(f"Max absolute error: {max_error:.3e}")
+# print(f"Mean absolute error: {mean_error:.3e}")
+# print("Product of A and inv(A) (first 3x3):\n", product[:3, :3])

@@ -45,15 +45,15 @@ int32_t main(int32_t argc, char *argv[])
     std::vector<std::complex<float>> Ainv(batchSize * n * n, {-1.0f, -1.0f});
     std::vector<int32_t> info(batchSize, 0);
 
-    std::cout << "------- input TensorInA -------" << std::endl;
+    std::cout << "[Input] A:" << std::endl;
     printTensor(A, batchSize, n, n);
-    std::cout << "------- input TensorInAinv -------" << std::endl;
+    std::cout << "[Input] Ainv:" << std::endl;
     printTensor(Ainv.data(), batchSize, n, n);
 
     auto ret = aclsolverCmatinvBatched(n, A, n, Ainv.data(), n, info.data(), batchSize, stream);
     CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverCmatinvBatched failed. ERROR: %d\n", ret); return ret);
 
-    std::cout << "------- output TensorInAinv -------" << std::endl;
+    std::cout << "[Output] Ainv:" << std::endl;
     printTensor(Ainv.data(), batchSize, n, n);
 
     WriteFile("./test/cmatinv_batched/data/output/Ainv_gm.bin", Ainv.data(), aMatrixFileSize);
