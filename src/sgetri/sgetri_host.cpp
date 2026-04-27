@@ -62,7 +62,12 @@ void GenerateTiling(int blockM, int blockN, int N, int strideN, uint8_t *gatherB
     }
 }
 
-aclError aclsolverSgetri(const int64_t n, float *A, const int64_t lda, int32_t *info, void *stream) {
+aclError aclsolverSgetri(aclsolverHandle_t handle, const int64_t n, float *A, const int64_t lda, int32_t *info) {
+    aclrtStream stream = nullptr;
+    if (handle != nullptr) {
+        aclsolverGetStream(handle, &stream);
+    }
+
     int32_t deviceId = 0;
     CHECK_ACLRT(aclrtGetDevice(&deviceId));
     auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();

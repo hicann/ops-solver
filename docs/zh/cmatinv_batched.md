@@ -24,7 +24,7 @@
     其中$A$为$n \times n$阶非奇异复数方阵，$I$为$n$阶单位矩阵。
 
 - 示例 \
-    输入“A”为：
+    输入"A"为：
     ```
     [2-2i ,1-i ,1-i, 1-i
     1-i, 2-2i, 1-i ,1-i
@@ -36,10 +36,10 @@
     1-i, 1-i ,3-3i ,1-i
     1-i, 1-i, 1-i, 3-3i]
     ```
-    输入“n”为： 4\
-    输入“batchSize”为：2\
-    调用“aclsolverCmatinvBatched”算子后，\
-    输出“Ainv”为：
+    输入"n"为： 4\
+    输入"batchSize"为：2\
+    调用"aclsolverCmatinvBatched"算子后，\
+    输出"Ainv"为：
     ```
     [0.4+0.4i, -0.1-0.1i,-0.1-0.1i ,-0.1-0.1i
     -0.1-0.1i ,0.4+0.4i ,-0.1-0.1i ,-0.1-0.1i
@@ -56,14 +56,14 @@
 - 函数定义
     ```
     aclError aclsolverCmatinvBatched(
+        aclsolverHandle_t handle,
         const int64_t n, 
         std::complex<float> *A, 
         const int64_t lda, 
         std::complex<float> *Ainv, 
         const int64_t lda_inv, 
         int32_t *info, 
-        int64_t batchSize, 
-        void *stream);
+        int64_t batchSize);
     ```
 - 参数说明：
     <table>
@@ -71,6 +71,11 @@
         <td align="center">参数名</td>
         <td align="center">输入输出</td>
         <td align="center">描述</td>
+    </tr>
+    <tr>
+        <td align="center">handle</td>
+        <td align="center">输入</td>
+        <td align="left">solver handle，通过aclsolverCreate创建</td>
     </tr>
     <tr>
         <td align="center">n</td>
@@ -107,7 +112,6 @@
         <td align="center">输入</td>
         <td align="left">复数矩阵求逆中的矩阵数量</td>
     </tr>
-    </tr>
     </table>
 
 - 算子约束： 
@@ -136,6 +140,11 @@
         aclInit(nullptr);
         aclrtSetDevice(deviceId);
         aclrtCreateStream(&stream);
+
+        // 创建solver handle并设置stream
+        aclsolverHandle_t handle = nullptr;
+        aclsolverCreate(&handle);
+        aclsolverSetStream(handle, stream);
 
         // 构造输入数据
         int64_t batchSize = 2;
@@ -171,10 +180,11 @@
         }
 
         // 调用 aclsolverCmatinvBatched
-        auto ret = aclsolverCmatinvBatched(n, tensorInAData.data(), n, tensorInAinvData.data(), n,tensorInInfoData.data(), batchSize, stream);
+        auto ret = aclsolverCmatinvBatched(handle, n, tensorInAData.data(), n, tensorInAinvData.data(), n,tensorInInfoData.data(), batchSize);
         CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverCmatinvBatched failed. ERROR: %d\n", ret); return ret);
 
         // 释放资源
+        aclsolverDestroy(handle);
         aclrtDestroyStream(stream);
         aclrtResetDevice(deviceId);
         aclFinalize();

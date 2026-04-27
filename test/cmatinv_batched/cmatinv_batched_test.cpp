@@ -23,8 +23,7 @@
 #include <cmath>
 #include "acl/acl.h"
 #include "cann_ops_solver.h"
-#include "../utils/data_utils.h"
-#include "../utils/utils.h"
+#include "../utils/test_utils.h"
 
 int32_t main(int32_t argc, char *argv[])
 {
@@ -38,6 +37,10 @@ int32_t main(int32_t argc, char *argv[])
     aclrtStream stream = nullptr;
     CHECK_ACL(aclrtCreateStream(&stream));
 
+    aclsolverHandle_t handle = nullptr;
+    CHECK_ACL(aclsolverCreate(&handle));
+    CHECK_ACL(aclsolverSetStream(handle, stream));
+
     size_t aMatrixFileSize = batchSize * n * n * sizeof(std::complex<float>);
     std::complex<float>* A;
     CHECK_ACL(aclrtMallocHost((void**)(&A), aMatrixFileSize));
@@ -50,7 +53,7 @@ int32_t main(int32_t argc, char *argv[])
     std::cout << "[Input] Ainv:" << std::endl;
     printTensor(Ainv.data(), batchSize, n, n);
 
-    auto ret = aclsolverCmatinvBatched(n, A, n, Ainv.data(), n, info.data(), batchSize, stream);
+    auto ret = aclsolverCmatinvBatched(handle, n, A, n, Ainv.data(), n, info.data(), batchSize);
     CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverCmatinvBatched failed. ERROR: %d\n", ret); return ret);
 
     std::cout << "[Output] Ainv:" << std::endl;
@@ -60,6 +63,7 @@ int32_t main(int32_t argc, char *argv[])
 
     CHECK_ACL(aclrtFreeHost(A));
     CHECK_ACL(aclrtDestroyStream(stream));
+    CHECK_ACL(aclsolverDestroy(handle));
     CHECK_ACL(aclrtResetDevice(deviceId));
     CHECK_ACL(aclFinalize());
 

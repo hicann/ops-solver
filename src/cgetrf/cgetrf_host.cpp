@@ -68,11 +68,12 @@ void GenerateGather(int blockM, int blockN, int M, int N, uint8_t *gatherBuf1, u
     }
 }
 
-aclError aclsolverCgetrf(const int64_t m, const int64_t n, std::complex<float> *A, const int64_t lda,
-                         int32_t *ipiv, int32_t *info, void *stream) {
-    // Get current device ID
-    int32_t deviceId = 0;
-    CHECK_ACLRT(aclrtGetDevice(&deviceId));
+aclError aclsolverCgetrf(aclsolverHandle_t handle, const int64_t m, const int64_t n, std::complex<float> *A, const int64_t lda,
+                         int32_t *ipiv, int32_t *info) {
+    aclrtStream stream = nullptr;
+    if (handle != nullptr) {
+        aclsolverGetStream(handle, &stream);
+    }
     auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
     uint32_t numBlocks = 0;
     if (ascendcPlatform != nullptr) {

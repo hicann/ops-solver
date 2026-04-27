@@ -22,8 +22,7 @@
 #include <cmath>
 #include "acl/acl.h"
 #include "cann_ops_solver.h"
-#include "../utils/data_utils.h"
-#include "../utils/utils.h"
+#include "../utils/test_utils.h"
 
 int main(int argc, char **argv) {
     int deviceId, M, N;
@@ -35,6 +34,10 @@ int main(int argc, char **argv) {
     CHECK_ACL(aclrtSetDevice(deviceId));
     aclrtStream stream = nullptr;
     CHECK_ACL(aclrtCreateStream(&stream));
+
+    aclsolverHandle_t handle = nullptr;
+    CHECK_ACL(aclsolverCreate(&handle));
+    CHECK_ACL(aclsolverSetStream(handle, stream));
 
     size_t aMatrixFileSize = M * N * sizeof(float);
 
@@ -48,7 +51,7 @@ int main(int argc, char **argv) {
     int32_t *ipiv = new int32_t[std::min(M, N)];
     int32_t *info;
 
-    auto ret = aclsolverSgetrf(M, N, A, N, ipiv, info, stream);
+    auto ret = aclsolverSgetrf(handle, M, N, A, N, ipiv, info);
     CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverSgetrf failed. ERROR: %d\n", ret); return ret);
 
     std::cout << "[Output] A (LU):" << std::endl;
@@ -63,6 +66,7 @@ int main(int argc, char **argv) {
     delete[] ipiv;
     CHECK_ACL(aclrtFreeHost(A));
     CHECK_ACL(aclrtDestroyStream(stream));
+    CHECK_ACL(aclsolverDestroy(handle));
     CHECK_ACL(aclrtResetDevice(deviceId));
     CHECK_ACL(aclFinalize());
 

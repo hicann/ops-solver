@@ -75,18 +75,17 @@ aclsolverStatus_t aclsolverGetStream(aclsolverHandle_t handle, aclrtStream *stre
 }
 #endif
 
-aclError aclsolverCmatinvBatched(const int64_t n, std::complex<float> *A, const int64_t lda, std::complex<float> *Ainv,
-                                 const int64_t lda_inv, int32_t *info, int64_t batchSize, void *stream);
+aclError aclsolverCmatinvBatched(aclsolverHandle_t handle, const int64_t n, std::complex<float> *A, const int64_t lda, std::complex<float> *Ainv,
+                                 const int64_t lda_inv, int32_t *info, int64_t batchSize);
 
-aclError aclsolverCgetriBatched(const int64_t n, std::complex<float> *A, const int64_t lda, std::complex<float> *Ainv,
-                                const int64_t lda_inv, int32_t *info, int64_t batchSize, void *stream);
+aclError aclsolverCgetriBatched(aclsolverHandle_t handle, const int64_t n, std::complex<float> *A, const int64_t lda, std::complex<float> *Ainv,
+                                const int64_t lda_inv, int32_t *info, int64_t batchSize);
 
-aclError aclsolverCgetri(const int64_t n, std::complex<float> *A, const int64_t lda, int32_t *info, void *stream);
+aclError aclsolverCgetri(aclsolverHandle_t handle, const int64_t n, std::complex<float> *A, const int64_t lda, int32_t *info);
 
-aclError aclsolverSgetri(const int64_t n, float *A, const int64_t lda, int32_t *info, void *stream);
+aclError aclsolverSgetri(aclsolverHandle_t handle, const int64_t n, float *A, const int64_t lda, int32_t *info);
 
-aclError aclsolverCgetrf(const int64_t m, const int64_t n, std::complex<float> *A, const int64_t lda, int32_t *ipiv,
-                         int32_t *info, void *stream);
+aclError aclsolverCgetrf(aclsolverHandle_t handle, const int64_t m, const int64_t n, std::complex<float> *A, const int64_t lda, int32_t *ipiv,
+                         int32_t *info);
 
-aclError aclsolverSgetrf(const int64_t m, const int64_t n, float *A, const int64_t lda, int32_t *ipiv, int32_t *info,
-                         void *stream);
+aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_t n, float *A, const int64_t lda, int32_t *ipiv, int32_t *info);

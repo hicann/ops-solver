@@ -63,14 +63,15 @@ struct CgetriBatchedTilingData {
     uint32_t tileM;
 };
 
-aclError aclsolverCgetriBatched(const int64_t n, std::complex<float> *A,
+aclError aclsolverCgetriBatched(aclsolverHandle_t handle, const int64_t n, std::complex<float> *A,
                                         const int64_t lda,
                                         std::complex<float> *Ainv,
                                         const int64_t lda_inv, int32_t *info,
-                                        int64_t batchSize, void *stream) {
-    // Get current device ID
-    int32_t deviceId = 0;
-    CHECK_ACLRT(aclrtGetDevice(&deviceId));
+                                        int64_t batchSize) {
+    aclrtStream stream = nullptr;
+    if (handle != nullptr) {
+        aclsolverGetStream(handle, &stream);
+    }
     
     auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
     uint32_t numBlocks = 0;

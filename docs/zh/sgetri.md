@@ -45,11 +45,11 @@
 - 函数定义
     ```
     aclError aclsolverSgetri(
+        aclsolverHandle_t handle,
         const int64_t n,
         float *A,
         const int64_t lda,
-        int32_t *info,
-        void *stream);
+        int32_t *info);
     ```
 - 参数说明：
     <table>
@@ -57,6 +57,11 @@
         <td align="center">参数名</td>
         <td align="center">输入输出</td>
         <td align="center">描述</td>
+    </tr>
+    <tr>
+        <td align="center">handle</td>
+        <td align="center">输入</td>
+        <td align="left">solver handle，通过aclsolverCreate创建</td>
     </tr>
     <tr>
         <td align="center">n</td>
@@ -104,6 +109,11 @@
         aclrtSetDevice(deviceId);
         aclrtCreateStream(&stream);
 
+        // 创建solver handle并设置stream
+        aclsolverHandle_t handle = nullptr;
+        aclsolverCreate(&handle);
+        aclsolverSetStream(handle, stream);
+
         // 构造输入数据
         int64_t n = 4;
         size_t aMatrixFileSize = n * n * sizeof(float);
@@ -114,11 +124,12 @@
         int32_t *info;
 
         // 调用 aclsolverSgetri
-        auto ret = aclsolverSgetri(n, A, n, info, stream);
+        auto ret = aclsolverSgetri(handle, n, A, n, info);
         CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverSgetri failed. ERROR: %d\n", ret); return ret);
 
         // 释放资源
         aclrtFreeHost(A);
+        aclsolverDestroy(handle);
         aclrtDestroyStream(stream);
         aclrtResetDevice(deviceId);
         aclFinalize();

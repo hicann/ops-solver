@@ -50,13 +50,13 @@
 - 函数定义
     ```
     aclError aclsolverCgetrf(
+        aclsolverHandle_t handle,
         const int64_t m,
         const int64_t n,
         std::complex<float> *A,
         const int64_t lda,
         int32_t *ipiv,
-        int32_t *info,
-        void *stream);
+        int32_t *info);
     ```
 - 参数说明：
     <table>
@@ -64,6 +64,11 @@
         <td align="center">参数名</td>
         <td align="center">输入输出</td>
         <td align="center">描述</td>
+    </tr>
+    <tr>
+        <td align="center">handle</td>
+        <td align="center">输入</td>
+        <td align="left">solver handle，通过aclsolverCreate创建</td>
     </tr>
     <tr>
         <td align="center">m</td>
@@ -122,6 +127,11 @@
         aclrtSetDevice(deviceId);
         aclrtCreateStream(&stream);
 
+        // 创建solver handle并设置stream
+        aclsolverHandle_t handle = nullptr;
+        aclsolverCreate(&handle);
+        aclsolverSetStream(handle, stream);
+
         // 构造输入数据
         int64_t m = 4;
         int64_t n = 4;
@@ -134,12 +144,13 @@
         int32_t *info;
 
         // 调用 aclsolverCgetrf
-        auto ret = aclsolverCgetrf(m, n, A, n, ipiv, info, stream);
+        auto ret = aclsolverCgetrf(handle, m, n, A, n, ipiv, info);
         CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverCgetrf failed. ERROR: %d\n", ret); return ret);
 
         // 释放资源
         delete[] ipiv;
         aclrtFreeHost(A);
+        aclsolverDestroy(handle);
         aclrtDestroyStream(stream);
         aclrtResetDevice(deviceId);
         aclFinalize();

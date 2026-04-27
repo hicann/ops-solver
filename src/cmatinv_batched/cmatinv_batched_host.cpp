@@ -101,18 +101,19 @@ CmatinvBatchedTilingData CalTilingData(uint32_t vecCoreNum, uint32_t dtype, uint
     return tilingData;
 }
 
-aclError aclsolverCmatinvBatched(const int64_t n, std::complex<float> *A,
+aclError aclsolverCmatinvBatched(aclsolverHandle_t handle, const int64_t n, std::complex<float> *A,
                                  const int64_t lda, std::complex<float> *Ainv,
                                  const int64_t lda_inv, int32_t *info,
-                                 int64_t batchSize, void *stream) {
-    if (n > MATRIX_SHAPE_LIMIT) {
-        LOG_PRINT("CmatinvBatched only supports n ≤ 32. For n > 32, use CgetriBatched instead.\n");
-        return aclsolverCgetriBatched(n, A, lda, Ainv, lda_inv, info, batchSize, stream);
+                                 int64_t batchSize) {
+    aclrtStream stream = nullptr;
+    if (handle != nullptr) {
+        aclsolverGetStream(handle, &stream);
     }
 
-    // Get current device ID
-    int32_t deviceId = 0;
-    CHECK_ACLRT(aclrtGetDevice(&deviceId));
+    if (n > MATRIX_SHAPE_LIMIT) {
+        LOG_PRINT("CmatinvBatched only supports n ≤ 32. For n > 32, use CgetriBatched instead.\n");
+        return aclsolverCgetriBatched(handle, n, A, lda, Ainv, lda_inv, info, batchSize);
+    }
     
     auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
     uint32_t numBlocks = 0;
