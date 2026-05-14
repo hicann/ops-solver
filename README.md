@@ -1,37 +1,47 @@
 # ops-solver
 
+## 🔥Latest News
+
+- [2026/04] ops-solver项目上线。
+
 ## 🚀概述
 ops-solver 是基于昇腾NPU芯片的高级数值求解算子库，提供包括矩阵分解、矩阵求逆、特征值计算、特征向量计算、线性方程组求解等功能。  
 
-## ⚡️快速入门
-若您希望**从零到一快速体验**项目能力，请访问下述简易教程。
+## 📌版本配套
 
-1. **[环境部署](docs/zh/install/quick_install.md)**：介绍基础环境搭建，包括软件包和三方依赖的获取和安装、源码下载等。
+当前仓库已验证通过的社区版 CANN Toolkit 如下：
 
-   >  **说明**：本步骤是QuickStart和各类教程的操作前提，请先完成基础环境搭建。
+| CANN 版本 | 时间戳 | 验证结果 | 下载链接 |
+| --- | --- | --- | --- |
+| `9.0.0` | `20260422000325096` | ✅ PASS | [aarch64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260422000325096/Ascend-cann-toolkit_9.0.0_linux-aarch64.run) / [x86_64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260422000325096/Ascend-cann-toolkit_9.0.0_linux-x86_64.run) |
+| `9.0.0` | `20260325000325538` | ✅ PASS | [aarch64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260325000325538/aarch64/) / [x86_64](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/legacy/20260325000325538/x86_64/) |
 
-2. **[QuickStart](docs/从开发一个简单算子出发.md)**：提供快速上手本项目能力的指南，包括算子开发流程等。
+请根据实际 CPU 架构，从上述链接目录中自行选择对应的 `.run` 安装包。
 
-## 📂目录结构
-ops-solver库的目录结构如下：
+## 🛠️环境准备
 
+[环境部署](docs/zh/install/quick_install.md)是体验本项目能力的前提，请先完成NPU驱动、CANN包安装等，确保环境正常。
+
+## ⬇️源码下载
+
+环境准备好后，下载与CANN版本配套的分支源码，命令如下，\$\{tag\_version\}替换为分支标签名。
+ 	 
+> 说明：若环境中已存在配套分支源码，**可跳过本步骤**，例如CANNLab默认已提供最新商发版CANN对应的源码。
+
+```bash
+git clone -b ${tag_version} https://gitcode.com/cann/ops-solver.git
 ```
-ops-solver
-├── build                        //可存放构建生成的文件
-├── docs                         //文档文件
-├── example                      //算子调用示例代码，包含可直接运行的Demo
-├── include                      //存放公共头文件
-├── scripts                      //脚本文件存放目录
-├── src                          //主体源代码目录
-│   ├── utils                    //公共函数
-│   ├── cmatinv_batched          //单精度复数批量矩阵求逆
-│   ├──  ...                     //其他算子实现
-│   └── CMakeLists.txt
-├── tests                        //测试代码
-```
+
+说明：对于CANNLab云开发环境，已默认提供最新商发CANN版本配套的源码，如需获取其他版本源码，参考上述命令获取。
+
+## 📖学习教程
+
+- [快速入门](docs/QUICKSTART.md)：从零开始快速体验项目核心基础能力，涵盖源码编译、算子调用、开发与调试等操作。
 
 ## 💬相关信息
 
+- [目录结构](docs/zh/install/dir_structure.md)
+- [接口列表](docs/zh/api_list.md)
 - [贡献指南](CONTRIBUTING.md)
 - [安全声明](SECURITY.md)
 - [许可证](LICENSE)
