@@ -23,7 +23,7 @@
 
 > 📝 **提示**
 >
-> - 当您在提交PR过程中遇到问题，常见问题的解决方法可参见[FAQs](./zh/context/infra-faqs.md)。
+> - 当您在提交PR过程中遇到问题，可在 [Issue](https://gitcode.com/cann/ops-solver/issues) 中提问。
 
 ### 贡献分类
 

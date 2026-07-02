@@ -30,7 +30,7 @@
 │   └── cann_ops_solver_common.h                        # 公共类型与声明
 ├── docs                                                # 项目文档
 │   ├── QUICKSTART.md                                   # 快速入门
-│   ├── op_list.md                                      # 接口/算子列表（概要）
+│   ├── api_list.md                                     # 接口/算子列表（概要）
 │   └── zh
 │       ├── install
 │       │   ├── quick_install.md                        # 环境部署

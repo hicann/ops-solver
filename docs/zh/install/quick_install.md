@@ -140,7 +140,7 @@ docker run --name cann_container --device /dev/davinci0 --device /dev/davinci_ma
 - patch
 - googletest（仅执行UT时依赖，建议版本 [release-1.11.0](https://github.com/google/googletest/releases/tag/release-1.11.0)）
 
-上述依赖可通过项目脚本一键安装，操作步骤如下：
+上述依赖请按以下步骤准备：
 
 1. 下载源码。
 
@@ -152,17 +152,7 @@ docker run --name cann_container --device /dev/davinci0 --device /dev/davinci_ma
     
 2. 安装依赖。
 
-    先通过项目根目录install\_deps.sh一键安装上述依赖，命令如下，若遇到不支持系统，请参考该文件自行适配。
-
-    ```bash
-    bash install_deps.sh
-    ```
-    
-    安装完后，再通过项目根目录requirements.txt继续安装python三方库依赖，命令如下。
-
-    ```bash
-    pip3 install -r requirements.txt
-    ```
+    请根据所用系统，使用包管理器（如 apt、yum）安装上述基础依赖。Python 三方库请使用 pip 按需安装。
 
 ## 环境验证
 

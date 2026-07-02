@@ -1,4 +1,4 @@
-## CmatinvBatched
+## CgetriBatched
 
 ## 产品支持情况
 
@@ -15,7 +15,7 @@
 ## 功能说明
 
 - 接口功能\
-    aclsolverCmatinvBatched：计算批量复数矩阵的逆矩阵。
+    aclsolverCgetriBatched：计算批量复数矩阵的逆矩阵，适用于矩阵维度较大的场景（n > 32）。
 
 - 计算公式
     $$
@@ -26,36 +26,36 @@
 - 示例 \
     输入"A"为：
     ```
-    [2-2i ,1-i ,1-i, 1-i
-    1-i, 2-2i, 1-i ,1-i
-    1-i, 1-i ,2-2i ,1-i
-    1-i ,1-i, 1-i, 2-2i]
+    [4+0i, 3+0i, 2+0i, 1+0i
+     3+0i, 4+0i, 3+0i, 2+0i
+     2+0i, 3+0i, 4+0i, 3+0i
+     1+0i, 2+0i, 3+0i, 4+0i]
 
-    [3-3i ,1-i, 1-i, 1-i
-    1-i, 3-3i, 1-i ,1-i
-    1-i, 1-i ,3-3i ,1-i
-    1-i, 1-i, 1-i, 3-3i]
+    [4+0i, 3+0i, 2+0i, 1+0i
+     3+0i, 4+0i, 3+0i, 2+0i
+     2+0i, 3+0i, 4+0i, 3+0i
+     1+0i, 2+0i, 3+0i, 4+0i]
     ```
     输入"n"为： 4\
     输入"batchSize"为：2\
-    调用"aclsolverCmatinvBatched"算子后，\
+    调用"aclsolverCgetriBatched"算子后，\
     输出"Ainv"为：
     ```
-    [0.4+0.4i, -0.1-0.1i,-0.1-0.1i ,-0.1-0.1i
-    -0.1-0.1i ,0.4+0.4i ,-0.1-0.1i ,-0.1-0.1i
-    -0.1-0.1i ,-0.1-0.1i,0.4+0.4i ,-0.1-0.1i
-    -0.1-0.1i ,-0.1-0.1i,-0.1-0.1i,0.4+0.4i]
+    [0.4+0i, -0.3+0i, 0.2+0i, -0.1+0i
+     -0.3+0i, 0.6+0i, -0.4+0i, 0.2+0i
+     0.2+0i, -0.4+0i, 0.6+0i, -0.3+0i
+     -0.1+0i, 0.2+0i, -0.3+0i, 0.4+0i]
 
-    [0.208+0.208i,-0.0417-0.0417i,-0.0417-0.0417i,-0.0417-0.0417i
-    -0.0417-0.0417i,0.208+0.208i,-0.0417-0.0417i,-0.0417-0.0417i
-    -0.0417-0.0417i,-0.0417-0.0417i,0.208+0.208i,-0.0417-0.0417i
-    -0.0417-0.0417i,-0.0417-0.0417i,-0.0417-0.0417i,0.208+0.208i]
+    [0.4+0i, -0.3+0i, 0.2+0i, -0.1+0i
+     -0.3+0i, 0.6+0i, -0.4+0i, 0.2+0i
+     0.2+0i, -0.4+0i, 0.6+0i, -0.3+0i
+     -0.1+0i, 0.2+0i, -0.3+0i, 0.4+0i]
     ```
 
 ## 函数原型
 - 函数定义
     ```
-    aclError aclsolverCmatinvBatched(
+    aclError aclsolverCgetriBatched(
         aclsolverHandle_t handle,
         const int64_t n, 
         std::complex<float> *A, 
@@ -116,15 +116,14 @@
 
 - 算子约束： 
   - lda、lda_inv、info参数在当前版本实际未启用。
-  - 入参n小于等于256。
-  - 当 n > 32 时，CmatinvBatched 会自动转调 aclsolverCgetriBatched 算子执行。
+  - 入参n大于32且小于等于256。
   - 入参batchSize小于等于3000。
 
 - 调用实现  
     使用内核调用符<<<>>>调用核函数。
 
 ## 调用示例
-- 完整代码示例：[aclsolverCmatinvBatched批量矩阵求逆示例](../../test/cmatinv_batched/cmatinv_batched_test.cpp)
+- 完整代码示例：测试文件待补充
 - 核心调用步骤：
 
     ```
@@ -149,9 +148,8 @@
 
         // 构造输入数据
         int64_t batchSize = 2;
-        int64_t n = 3;
+        int64_t n = 4;
         int64_t tensorASize = batchSize * n * n;
-        std::vector<int64_t> shape = {batchSize, n, n };
         std::vector<std::complex<float>> tensorInAData;
         std::vector<std::complex<float>> tensorInAinvData;
         std::vector<int32_t> tensorInInfoData;
@@ -162,9 +160,9 @@
             for (int32_t i = 0; i < n; i++) {
                 for (int32_t j = 0; j < n; j++) {
                     if (i == j) {
-                        tensorInAData[n * n * batchIdx + n * i + j] = {2.0f + batchIdx, -2.0f - batchIdx};
+                        tensorInAData[n * n * batchIdx + n * i + j] = {4.0f, 0.0f};
                     } else {
-                        tensorInAData[n * n * batchIdx + n * i + j] = {1.0f, -1.0f};
+                        tensorInAData[n * n * batchIdx + n * i + j] = {static_cast<float>(n - std::abs(i - j)), 0.0f};
                     }
                 }
             }
@@ -180,9 +178,9 @@
             tensorInInfoData[batchIdx] = 0;
         }
 
-        // 调用 aclsolverCmatinvBatched
-        auto ret = aclsolverCmatinvBatched(handle, n, tensorInAData.data(), n, tensorInAinvData.data(), n,tensorInInfoData.data(), batchSize);
-        CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverCmatinvBatched failed. ERROR: %d\n", ret); return ret);
+        // 调用 aclsolverCgetriBatched
+        auto ret = aclsolverCgetriBatched(handle, n, tensorInAData.data(), n, tensorInAinvData.data(), n, tensorInInfoData.data(), batchSize);
+        CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverCgetriBatched failed. ERROR: %d\n", ret); return ret);
 
         // 释放资源
         aclsolverDestroy(handle);

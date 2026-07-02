@@ -76,7 +76,7 @@
     <tr>
         <td align="center">lda</td>
         <td align="center">输入</td>
-        <td align="left">A左右相邻元素间的内存地址偏移量（当前约束为n）</td>
+        <td align="left">A同一列中相邻两行元素间的内存地址偏移量（leading dimension）（当前约束为n）</td>
     </tr>
     <tr>
         <td align="center">info</td>

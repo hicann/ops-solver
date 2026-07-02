@@ -60,6 +60,14 @@
     <td>AI Core</td>
     <td>批量复数矩阵求逆，对一批复数矩阵同时进行求逆运算，提高计算效率。</td>
   </tr>
+  <tr>
+    <td>solver</td>
+    <td><a href="./zh/cgetri_batched.md">cgetri_batched</a></td>
+    <td>✓</td>
+    <td>✓</td>
+    <td>AI Core</td>
+    <td>批量复数矩阵求逆，适用于矩阵维度较大（n>32）的场景，对一批复数矩阵同时进行求逆运算。</td>
+  </tr>
 </tbody></table>
 
 ## 算子接口
@@ -74,8 +82,6 @@ ops-solver提供类似cuSolver风格的C API接口，通过handle管理上下文
 | `aclsolverDestroy` | 销毁solver handle |
 | `aclsolverSetStream` | 设置计算流 |
 | `aclsolverGetStream` | 获取计算流 |
-| `aclsolverSetWorkspace` | 设置工作空间 |
-| `aclsolverGetVersion` | 获取版本号 |
 
 ### 算子计算接口
 
@@ -85,5 +91,5 @@ ops-solver提供类似cuSolver风格的C API接口，通过handle管理上下文
 | `aclsolverCgetri` | 复数矩阵求逆 |
 | `aclsolverSgetrf` | 单精度矩阵LU分解 |
 | `aclsolverSgetri` | 单精度矩阵求逆 |
-| `aclsolverCmatinvBatched` | 批量复数矩阵求逆 |
-| `aclsolverCgetriBatched` | 批量复数矩阵求逆 |
+| `aclsolverCmatinvBatched` | 批量复数矩阵求逆（小矩阵，n≤32） |
+| `aclsolverCgetriBatched` | 批量复数矩阵求逆（大矩阵，n>32） |
