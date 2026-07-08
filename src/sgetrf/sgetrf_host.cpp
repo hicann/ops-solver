@@ -57,15 +57,16 @@ void GenerateGather(int blockM, int blockN, int M, int N, uint8_t *gatherBuf1, u
 
 aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_t n, float *A, const int64_t lda,
                          int32_t *ipiv, int32_t *info) {
+    SOLVER_ECHECK(m > 0 && n > 0 && lda > 0 && A != nullptr && ipiv != nullptr && info != nullptr,
+                  "aclsolverSgetrf invalid param: m, n, lda <= 0, or A, ipiv, info is nullptr.",
+                  ACL_ERROR_INVALID_PARAM);
     aclrtStream stream = nullptr;
     if (handle != nullptr) {
         aclsolverGetStream(handle, &stream);
     }
     auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
-    uint32_t numBlocks = 0;
-    if (ascendcPlatform != nullptr) {
-        numBlocks = ascendcPlatform->GetCoreNumAic();
-    }
+    // kernel hardcoded gemm1BlockNum=8, gemm2BlockNum=20-8, must use 20 blocks
+    uint32_t numBlocks = 20;
 
     int M, N, blockDim, blockN, blockM, tileM;
     M = m;
@@ -81,62 +82,67 @@ aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
     size_t wFileSize = t * sizeof(int);
 
     uint8_t* aMatrixHost = reinterpret_cast<uint8_t*>(A);
-    uint8_t* aMatrixDevice;
-    CHECK_ACLRT(aclrtMalloc((void**)&aMatrixDevice, aMatrixFileSize, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACLRT(aclrtMemcpy(aMatrixDevice, aMatrixFileSize, aMatrixHost, aMatrixFileSize, ACL_MEMCPY_HOST_TO_DEVICE));
+    uint8_t* aMatrixDevice = nullptr;
+    uint8_t* aMatrixDeviceWork = nullptr;
+    uint8_t* wHost = nullptr;
+    uint8_t* wDevice = nullptr;
+    uint8_t* workDevice = nullptr;
+    uint8_t *gatherHost1 = nullptr, *gatherHost2 = nullptr;
+    uint8_t *gatherDevice1 = nullptr, *gatherDevice2 = nullptr;
+    uint8_t *sync = nullptr;
+
+    auto cleanup = [&]() {
+        if (aMatrixDevice) aclrtFree(aMatrixDevice);
+        if (aMatrixDeviceWork) aclrtFree(aMatrixDeviceWork);
+        if (wDevice) aclrtFree(wDevice);
+        if (wHost) aclrtFreeHost(wHost);
+        if (workDevice) aclrtFree(workDevice);
+        if (gatherDevice1) aclrtFree(gatherDevice1);
+        if (gatherDevice2) aclrtFree(gatherDevice2);
+        if (gatherHost1) aclrtFreeHost(gatherHost1);
+        if (gatherHost2) aclrtFreeHost(gatherHost2);
+    };
+
+    CHECK_ACLRT(aclrtMalloc((void**)&aMatrixDevice, aMatrixFileSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
+    CHECK_ACLRT(aclrtMemcpy(aMatrixDevice, aMatrixFileSize, aMatrixHost, aMatrixFileSize, ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
 
     size_t aMatrixWorkSize = ((N + 127) / 128 * 128) * ((M + 15) / 16 * 16) * sizeof(float);
-    uint8_t* aMatrixDeviceWork;
-    CHECK_ACLRT(aclrtMalloc((void**)&aMatrixDeviceWork, aMatrixWorkSize, ACL_MEM_MALLOC_HUGE_FIRST));
+    CHECK_ACLRT(aclrtMalloc((void**)&aMatrixDeviceWork, aMatrixWorkSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
 
-    uint8_t* wHost;
-    uint8_t* wDevice;
-    CHECK_ACLRT(aclrtMallocHost((void**)(&wHost), wFileSize));
-    CHECK_ACLRT(aclrtMalloc((void**)&wDevice, wFileSize, ACL_MEM_MALLOC_HUGE_FIRST));
+    CHECK_ACLRT(aclrtMallocHost((void**)(&wHost), wFileSize), cleanup());
+    CHECK_ACLRT(aclrtMalloc((void**)&wDevice, wFileSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
     aclrtMemset(wDevice, wFileSize, -1, wFileSize);
 
     int workM = (M + tileM - 1) / tileM * tileM;
     size_t workSize = workM * blockN * sizeof(float);
-    uint8_t* workDevice;
-    CHECK_ACLRT(aclrtMalloc((void**)&workDevice, workSize, ACL_MEM_MALLOC_HUGE_FIRST));
+    CHECK_ACLRT(aclrtMalloc((void**)&workDevice, workSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
 
     size_t gatherSize = tileM * blockN * sizeof(float);
-    uint8_t *gatherHost1, *gatherHost2;
-    uint8_t *gatherDevice1, *gatherDevice2;
-    CHECK_ACLRT(aclrtMallocHost((void**)(&gatherHost1), gatherSize));
-    CHECK_ACLRT(aclrtMallocHost((void**)(&gatherHost2), gatherSize));
-    CHECK_ACLRT(aclrtMalloc((void**)&gatherDevice1, gatherSize, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACLRT(aclrtMalloc((void**)&gatherDevice2, gatherSize, ACL_MEM_MALLOC_HUGE_FIRST));
+    CHECK_ACLRT(aclrtMallocHost((void**)(&gatherHost1), gatherSize), cleanup());
+    CHECK_ACLRT(aclrtMallocHost((void**)(&gatherHost2), gatherSize), cleanup());
+    CHECK_ACLRT(aclrtMalloc((void**)&gatherDevice1, gatherSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
+    CHECK_ACLRT(aclrtMalloc((void**)&gatherDevice2, gatherSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
 
     GenerateGather(tileM, blockN, (M + 15) / 16 * 16, (N + 15) / 16 * 16, gatherHost1, gatherHost2);
-    CHECK_ACLRT(aclrtMemcpyAsync(gatherDevice1, gatherSize, gatherHost1, gatherSize, ACL_MEMCPY_HOST_TO_DEVICE, stream));
-    CHECK_ACLRT(aclrtMemcpyAsync(gatherDevice2, gatherSize, gatherHost2, gatherSize, ACL_MEMCPY_HOST_TO_DEVICE, stream));
+    CHECK_ACLRT(aclrtMemcpyAsync(gatherDevice1, gatherSize, gatherHost1, gatherSize, ACL_MEMCPY_HOST_TO_DEVICE, stream), cleanup());
+    CHECK_ACLRT(aclrtMemcpyAsync(gatherDevice2, gatherSize, gatherHost2, gatherSize, ACL_MEMCPY_HOST_TO_DEVICE, stream), cleanup());
 
-    uint8_t *sync = nullptr;
-    CHECK_ACLRT(aclrtGetHardwareSyncAddr((void **)&sync));
+    CHECK_ACLRT(aclrtGetHardwareSyncAddr((void **)&sync), cleanup());
 
     sgetrf_kernel_do(sync, M, N, blockN, tileM, aMatrixDevice, aMatrixDeviceWork, wDevice, workDevice,
                      gatherDevice1, gatherDevice2, blockDim, stream);
-    CHECK_ACLRT(aclrtSynchronizeStream(stream));
+    CHECK_ACLRT(aclrtSynchronizeStream(stream), cleanup());
 
-    CHECK_ACLRT(aclrtMemcpy(aMatrixHost, aMatrixFileSize, aMatrixDevice, aMatrixFileSize, ACL_MEMCPY_DEVICE_TO_HOST));
+    CHECK_ACLRT(aclrtMemcpy(aMatrixHost, aMatrixFileSize, aMatrixDevice, aMatrixFileSize, ACL_MEMCPY_DEVICE_TO_HOST), cleanup());
 
     // Copy pivot information back to ipiv
     int32_t *wHostInt = reinterpret_cast<int32_t*>(wHost);
-    CHECK_ACLRT(aclrtMemcpy(wHost, wFileSize, wDevice, wFileSize, ACL_MEMCPY_DEVICE_TO_HOST));
+    CHECK_ACLRT(aclrtMemcpy(wHost, wFileSize, wDevice, wFileSize, ACL_MEMCPY_DEVICE_TO_HOST), cleanup());
     for (int i = 0; i < std::min(M, N); ++i) {
-        ipiv[i] = wHostInt[i];  // Convert to 1-based indexing
+        ipiv[i] = wHostInt[i] + 1; // Convert to 1-based indexing
     }
 
-    CHECK_ACLRT(aclrtFree(aMatrixDevice));
-    CHECK_ACLRT(aclrtFree(aMatrixDeviceWork));
-    CHECK_ACLRT(aclrtFree(wDevice));
-    CHECK_ACLRT(aclrtFreeHost(wHost));
-    CHECK_ACLRT(aclrtFree(workDevice));
-    CHECK_ACLRT(aclrtFree(gatherDevice1));
-    CHECK_ACLRT(aclrtFree(gatherDevice2));
-    CHECK_ACLRT(aclrtFreeHost(gatherHost1));
-    CHECK_ACLRT(aclrtFreeHost(gatherHost2));
+    cleanup();
 
     return ACL_SUCCESS;
 }

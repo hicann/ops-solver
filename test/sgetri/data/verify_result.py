@@ -42,10 +42,10 @@ def verify_result(A, invA, N):
                 abs(output_data - golden_data) / abs(golden_data),
             )
         )
-        if index == 32:
+        if index >= 32:
             break
     error_ratio = float(different_element_indexes.size) / golden.size
-    print("error ratio: %.4f, tolrence: %.4f" % (error_ratio, error_tol))
+    print("error ratio: %.4f, tolerance: %.4f" % (error_ratio, error_tol))
     return error_ratio <= error_tol
 
 

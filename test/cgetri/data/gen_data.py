@@ -23,6 +23,9 @@ a_real = np.random.randn(n, n).astype(np.float32)  # 实部
 a_imag = np.random.randn(n, n).astype(np.float32)  # 虚部
 a = a_real + 1j * a_imag  # 组合成复数矩阵 (complex64)
 
+# 先打乱行顺序，增加测试场景多样性
+np.random.shuffle(a)
+
 # 确保对角占优（复数情况）
 for i in range(n):
     # 计算非对角线元素的绝对值之和（复数取模）
@@ -30,7 +33,6 @@ for i in range(n):
     # 调整对角线元素，使其模大于行其他元素模之和
     a[i, i] = (row_sum + np.random.rand() * 10) * (1 + 1j)  # 复数对角增强
 
-np.random.shuffle(a)
 
 # 计算逆矩阵 (complex64)
 inv_a = np.linalg.inv(a).astype(np.complex64)

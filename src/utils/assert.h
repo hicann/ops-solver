@@ -51,24 +51,15 @@
     printf(message, ##__VA_ARGS__);                                            \
   } while (0)
 
-#define CHECK_ACLRT(func)                                                      \
+#define CHECK_ACLRT(func, cleanup_action)                                      \
   {                                                                            \
     aclError status = (func);                                                  \
     if (status != ACL_SUCCESS) {                                               \
       std::cerr << "ACL Runtime Error at " << __FILE__ << ":" << __LINE__      \
                 << " (error code: " << status << ")" << std::endl;             \
-      exit(EXIT_FAILURE);                                                      \
+      cleanup_action;                                                          \
+      return status;                                                           \
     }                                                                          \
   }
-
-// Macro function for unwinding rt errors.
-#define RT_CHECK(status)                                                       \
-  do {                                                                         \
-    int32_t error = status;                                                    \
-    if (error != 0) {                                                          \
-      std::cerr << __FILE__ << ":" << __LINE__ << " rtError:" << error         \
-                << std::endl;                                                  \
-    }                                                                          \
-  } while (0)
 
 #endif // ASSERT_H

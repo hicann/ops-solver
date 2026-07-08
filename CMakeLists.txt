@@ -59,7 +59,7 @@ set(ARCH_SPECIFIC_DIRS arch35 arch20 CACHE INTERNAL "Architecture specific direc
 
 set(ASCEND_CANN_PACKAGE_PATH $ENV{ASCEND_HOME_PATH})
 set(RUN_MODE "npu" CACHE STRING "run mode: npu")
-set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type Release/Debug" FORCE)
+set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type Release/Debug")
 set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_LIST_DIR}/build_out" CACHE STRING "install path" FORCE)
 
 # 外部传参

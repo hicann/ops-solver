@@ -34,7 +34,7 @@ __global__ __aicore__ void cgetri_kernel(GM_ADDR sync, int orgM, int orgN,
                                          GM_ADDR gather3_gm, GM_ADDR eye_gm) {
   KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_MIX_AIC_1_2);
 
-  GM_ADDR workspace;
+  GM_ADDR workspace = nullptr;
   custom_getri(DTYPE_COMPLEX64, orgM, orgN, blockM, blockN, tileM, A_org, A_org,
             A_work, W, work_gm, gather1_gm, gather2_gm, gather3_gm, eye_gm, workspace);
 }

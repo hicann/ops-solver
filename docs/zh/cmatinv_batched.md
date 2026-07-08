@@ -117,7 +117,7 @@
 - 算子约束： 
   - lda、lda_inv、info参数在当前版本实际未启用。
   - 入参n小于等于256。
-  - 当 n > 32 时，CmatinvBatched 会自动转调 aclsolverCgetriBatched 算子执行。
+  - 当 n >= 32 时，CmatinvBatched 会自动转调 aclsolverCgetriBatched 算子执行。
   - 入参batchSize小于等于3000。
 
 - 调用实现  

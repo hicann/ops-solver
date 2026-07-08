@@ -110,21 +110,24 @@ aclError aclsolverCmatinvBatched(aclsolverHandle_t handle, const int64_t n, std:
         aclsolverGetStream(handle, &stream);
     }
 
-    if (n > MATRIX_SHAPE_LIMIT) {
-        LOG_PRINT("CmatinvBatched only supports n ≤ 32. For n > 32, use CgetriBatched instead.\n");
+    if (n >= MATRIX_SHAPE_LIMIT) {
+        LOG_PRINT("CmatinvBatched only supports n < 32. For n >= 32, use CgetriBatched instead.\n");
         return aclsolverCgetriBatched(handle, n, A, lda, Ainv, lda_inv, info, batchSize);
     }
     
     auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
     uint32_t numBlocks = 0;
     if (ascendcPlatform != nullptr) {
-        numBlocks = ascendcPlatform->GetCoreNumAic();
+        numBlocks = ascendcPlatform->GetCoreNumAiv();
+    }
+    if (numBlocks > 40) {
+        numBlocks = 40;
     }
 
-    if (lda <= 0 || lda_inv <= 0) {
-        LOG_PRINT("CmatinvBatched get lda <= 0 or lda_inv <= 0.\n");
-    }
-    SOLVER_ECHECK(n > 0 && batchSize > 0, "CmatinvBatched get n <= 0 || batchSize <= 0.", ACL_ERROR_INVALID_PARAM);
+    SOLVER_ECHECK(n > 0 && batchSize > 0 && lda > 0 && lda_inv > 0 &&
+                  A != nullptr && Ainv != nullptr && info != nullptr,
+                  "CmatinvBatched get invalid param: n, batchSize, lda, lda_inv <= 0, or A, Ainv, info is nullptr.",
+                  ACL_ERROR_INVALID_PARAM);
     SOLVER_ECHECK(n <= MAX_MATRIX_SHAPE && batchSize <= MAX_MATRIX_BATCH,
                   "CmatinvBatched get n <= 256 || batchSize <= 3000.",
                   ACL_ERROR_INVALID_PARAM);
@@ -176,57 +179,57 @@ aclError aclsolverCmatinvBatched(aclsolverHandle_t handle, const int64_t n, std:
 
     uint8_t *hostA = reinterpret_cast<uint8_t *>(A);
     uint8_t *hostAinv = reinterpret_cast<uint8_t *>(Ainv);
-    uint8_t *hostinfo = reinterpret_cast<uint8_t *>(info);
     uint8_t *hostUniReal = reinterpret_cast<uint8_t *>(uniBatchRealData.data());
     uint8_t *hostUniImag = reinterpret_cast<uint8_t *>(uniBatchImagData.data());
     uint8_t *hostOffset = reinterpret_cast<uint8_t *>(offsetData.data());
     auto sizeA = batchSize * n * n * sizeof(std::complex<float>);
     auto sizeAinv = batchSize * n * n * sizeof(std::complex<float>);
-    auto sizeinfo = batchSize * sizeof(int32_t);
     auto sizeUniReal = N * alignedN * computeNumPerRepeat * sizeof(float);
     auto sizeUniImag = N * alignedN * computeNumPerRepeat * sizeof(float);
     auto sizeOffset = offsetSize * sizeof(uint32_t);
 
     uint8_t *d_A = nullptr;
     uint8_t *d_Ainv = nullptr;
-    uint8_t *d_info = nullptr;
     uint8_t *d_UniReal = nullptr;
     uint8_t *d_UniImag = nullptr;
     uint8_t *d_Offset = nullptr;
-    CHECK_ACLRT(aclrtMalloc((void **)&d_A, sizeA, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACLRT(aclrtMalloc((void **)&d_Ainv, sizeAinv, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACLRT(aclrtMalloc((void **)&d_info, sizeinfo, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACLRT(aclrtMalloc((void **)&d_UniReal, sizeUniReal, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACLRT(aclrtMalloc((void **)&d_UniImag, sizeUniImag, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACLRT(aclrtMalloc((void **)&d_Offset, sizeOffset, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACLRT(aclrtMemcpy(d_A, sizeA, hostA, sizeA, ACL_MEMCPY_HOST_TO_DEVICE));
-    CHECK_ACLRT(aclrtMemcpy(d_Ainv, sizeAinv, hostAinv, sizeAinv, ACL_MEMCPY_HOST_TO_DEVICE));
-    CHECK_ACLRT(aclrtMemcpy(d_info, sizeinfo, hostinfo, sizeinfo, ACL_MEMCPY_HOST_TO_DEVICE));
-    CHECK_ACLRT(aclrtMemcpy(d_UniReal, sizeUniReal, hostUniReal, sizeUniReal, ACL_MEMCPY_HOST_TO_DEVICE));
-    CHECK_ACLRT(aclrtMemcpy(d_UniImag, sizeUniImag, hostUniImag, sizeUniImag, ACL_MEMCPY_HOST_TO_DEVICE));
-    CHECK_ACLRT(aclrtMemcpy(d_Offset, sizeOffset, hostOffset, sizeOffset, ACL_MEMCPY_HOST_TO_DEVICE));
+    uint8_t *tilingDevice = nullptr;
+    uint8_t *workSpace = nullptr;
+
+    auto cleanup = [&]() {
+        if (d_A) aclrtFree(d_A);
+        if (d_UniReal) aclrtFree(d_UniReal);
+        if (d_UniImag) aclrtFree(d_UniImag);
+        if (d_Offset) aclrtFree(d_Offset);
+        if (d_Ainv) aclrtFree(d_Ainv);
+        if (workSpace) aclrtFree(workSpace);
+        if (tilingDevice) aclrtFree(tilingDevice);
+    };
+
+    CHECK_ACLRT(aclrtMalloc((void **)&d_A, sizeA, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
+    CHECK_ACLRT(aclrtMalloc((void **)&d_Ainv, sizeAinv, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
+    CHECK_ACLRT(aclrtMalloc((void **)&d_UniReal, sizeUniReal, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
+    CHECK_ACLRT(aclrtMalloc((void **)&d_UniImag, sizeUniImag, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
+    CHECK_ACLRT(aclrtMalloc((void **)&d_Offset, sizeOffset, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
+    CHECK_ACLRT(aclrtMemcpy(d_A, sizeA, hostA, sizeA, ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
+    CHECK_ACLRT(aclrtMemcpy(d_Ainv, sizeAinv, hostAinv, sizeAinv, ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
+    CHECK_ACLRT(aclrtMemcpy(d_UniReal, sizeUniReal, hostUniReal, sizeUniReal, ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
+    CHECK_ACLRT(aclrtMemcpy(d_UniImag, sizeUniImag, hostUniImag, sizeUniImag, ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
+    CHECK_ACLRT(aclrtMemcpy(d_Offset, sizeOffset, hostOffset, sizeOffset, ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
 
     CmatinvBatchedTilingData tiling = CalTilingData(numBlocks, DTYPE_COMPLEX64, n, batchSize);
-    uint8_t *tilingDevice = nullptr;
-    CHECK_ACLRT(aclrtMalloc((void **)&tilingDevice, sizeof(CmatinvBatchedTilingData), ACL_MEM_MALLOC_HUGE_FIRST));
+    CHECK_ACLRT(aclrtMalloc((void **)&tilingDevice, sizeof(CmatinvBatchedTilingData), ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
     CHECK_ACLRT(aclrtMemcpy(tilingDevice, sizeof(CmatinvBatchedTilingData),
                             &tiling, sizeof(CmatinvBatchedTilingData),
-                            ACL_MEMCPY_HOST_TO_DEVICE));
-    uint8_t *workSpace = nullptr;
-    CHECK_ACLRT(aclrtMalloc((void **)&workSpace, WORKSPACE_SIZE, ACL_MEM_MALLOC_HUGE_FIRST));
+                            ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
+    CHECK_ACLRT(aclrtMalloc((void **)&workSpace, WORKSPACE_SIZE, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
 
     cmatinv_batched_kernel_do(d_A, d_UniReal, d_UniImag, d_Offset, d_Ainv, workSpace, tilingDevice, numBlocks, stream);
-    aclrtSynchronizeStream(stream);
+    CHECK_ACLRT(aclrtSynchronizeStream(stream), cleanup());
 
-    CHECK_ACLRT(aclrtMemcpy(hostAinv, sizeAinv, d_Ainv, sizeAinv, ACL_MEMCPY_DEVICE_TO_HOST));
+    CHECK_ACLRT(aclrtMemcpy(hostAinv, sizeAinv, d_Ainv, sizeAinv, ACL_MEMCPY_DEVICE_TO_HOST), cleanup());
 
-    aclrtFree(d_A);
-    aclrtFree(d_UniReal);
-    aclrtFree(d_UniImag);
-    aclrtFree(d_Offset);
-    aclrtFree(d_Ainv);
-    aclrtFree(workSpace);
-    aclrtFree(tilingDevice);
+    cleanup();
 
     return ACL_SUCCESS;
 }

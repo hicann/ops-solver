@@ -13,7 +13,6 @@
 import sys
 import numpy as np
 
-# for float32
 relative_tol = 5e-3
 absolute_tol = 5e-3
 error_tol = 1e-4
@@ -23,7 +22,6 @@ def verify_result(A, invA, batchSize, N):
     A = np.fromfile(A, dtype=np.complex64).reshape(batchSize, N, N)
     invA = np.fromfile(invA, dtype=np.complex64).reshape(batchSize, N, N)
 
-    # 计算每个batch的误差
     total_elements = 0
     total_different = 0
 
@@ -35,7 +33,6 @@ def verify_result(A, invA, batchSize, N):
         )
         different_element_indexes = np.where(different_element_results == False)[0]
 
-        # 打印前32个不匹配的元素
         for index in range(len(different_element_indexes)):
             if total_different >= 32:
                 break
@@ -66,11 +63,11 @@ def verify_result(A, invA, batchSize, N):
 if __name__ == "__main__":
     try:
         batchSize = int(sys.argv[1]) if len(sys.argv) > 1 else 2
-        n = int(sys.argv[2]) if len(sys.argv) > 2 else 3
+        n = int(sys.argv[2]) if len(sys.argv) > 2 else 48
 
         res = verify_result(
-            "./test/cmatinv_batched/data/input/A_gm.bin",
-            "./test/cmatinv_batched/data/output/Ainv_gm.bin",
+            "./test/cgetri_batched/data/input/A_gm.bin",
+            "./test/cgetri_batched/data/output/Ainv_gm.bin",
             batchSize,
             n,
         )

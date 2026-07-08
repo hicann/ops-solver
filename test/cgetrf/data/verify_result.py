@@ -16,7 +16,7 @@ import numpy as np
 eps = 1e-3
 error_tol = 1e-4
 
-def gemm(a, w):
+def gemm(a):
     """矩阵乘法,用于验证 LU 分解结果"""
     m, n = a.shape
     b = np.zeros((m, n), dtype=np.complex64)
@@ -46,11 +46,12 @@ def main():
     # 根据 pivot 数组进行行交换
     for j in range(n):
         for i in range(t):
-            assert w[i] >= i and w[i] < m
-            a[[i, w[i]], j] = a[[w[i], i], j]
+            assert w[i] >= i + 1 and w[i] <= m
+            p = w[i] - 1  # convert 1-based to 0-based
+            a[[i, p], j] = a[[p, i], j]
 
     # 计算 expected 结果
-    b = gemm(x, w)
+    b = gemm(x)
 
     print("-------------------------------------------------------")
     cnt = 0

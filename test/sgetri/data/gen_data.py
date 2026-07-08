@@ -21,6 +21,9 @@ n = int(sys.argv[1]) if len(sys.argv) > 1 else 32 # 使用方式: python script.
 # 生成随机实数矩阵 (float32)
 a = np.random.randn(n, n).astype(np.float32)
 
+# 先打乱行顺序，增加测试场景多样性
+np.random.shuffle(a)
+
 # 确保对角占优（实数情况）
 for i in range(n):
     # 计算非对角线元素的绝对值之和
@@ -28,7 +31,6 @@ for i in range(n):
     # 调整对角线元素，使其绝对值大于行其他元素绝对值之和
     a[i, i] = row_sum + np.random.rand() * 10
 
-np.random.shuffle(a)
 
 # 计算逆矩阵 (float32)
 inv_a = np.linalg.inv(a).astype(np.float32)

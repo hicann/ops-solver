@@ -160,7 +160,6 @@ public:
     }
     __aicore__ inline void Process(int offsetM, int offsetN, int blockM) {
         assert(blockM * blockN <= 8192 * 2);
-        assert(blockM >= blockN);   // not supporting M < N
         this->blockM = blockM;
         int offset = offsetM + offsetN * M;
         {   // CopyIn
@@ -205,7 +204,7 @@ public:
             };
             DataCopy(aGlobal[offset], dstLocal[0], coptOutParams);
             DataCopy(aGlobal[offset + M * singleCoreN], dstLocal[1], coptOutParams);
-            outQueueDst[0].FreeTensor(dstLocal[1]);
+            outQueueDst[0].FreeTensor(dstLocal[0]);
             outQueueDst[1].FreeTensor(dstLocal[1]);
         }
     }

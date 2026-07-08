@@ -79,17 +79,19 @@ aclError aclsolverCgetriBatched(aclsolverHandle_t handle, const int64_t n, std::
         numBlocks = ascendcPlatform->GetCoreNumAic();
     }
 
-    if (lda <= 0 || lda_inv <= 0) {
-        LOG_PRINT("CgetriBatched get lda <= 0 or lda_inv <= 0.\n");
+    if (numBlocks > 20) {
+        numBlocks = 20;
     }
-    SOLVER_ECHECK(n > 0 && batchSize > 0,
-                  "CgetriBatched get n <= 0 || batchSize <= 0.",
+
+    SOLVER_ECHECK(n > 0 && batchSize > 0 && lda > 0 && lda_inv > 0 &&
+                  A != nullptr && Ainv != nullptr && info != nullptr,
+                  "CgetriBatched get invalid param: n, batchSize, lda, lda_inv <= 0, or A, Ainv, info is nullptr.",
                   ACL_ERROR_INVALID_PARAM);
     SOLVER_ECHECK(n <= MAX_MATRIX_SHAPE && batchSize <= MAX_MATRIX_BATCH,
                   "CgetriBatched get n <= 256 || batchSize <= 3000.",
                   ACL_ERROR_INVALID_PARAM);
-    SOLVER_ECHECK(n > MATRIX_SHAPE_LIMIT,
-                  "CgetriBatched only supports n > 32. For n ≤ 32, use "
+    SOLVER_ECHECK(n >= MATRIX_SHAPE_LIMIT,
+                  "CgetriBatched only supports n >= 32. For n < 32, use "
                   "CmatinvBatched instead.",
                   ACL_ERROR_INVALID_PARAM);
 
@@ -170,6 +172,7 @@ aclError aclsolverCgetriBatched(aclsolverHandle_t handle, const int64_t n, std::
     size_t size_gather3Offset = gatherEleNum * sizeof(uint32_t);
     size_t size_eyeBatchMat = batchNum * eyeMatEleNum * sizeof(float);
 
+
     uint8_t* d_wBatch = nullptr;
     uint8_t* d_aWork = nullptr;
     uint8_t* d_workGm = nullptr;
@@ -177,37 +180,54 @@ aclError aclsolverCgetriBatched(aclsolverHandle_t handle, const int64_t n, std::
     uint8_t* d_gather2Offset = nullptr;
     uint8_t* d_gather3Offset = nullptr;
     uint8_t* d_eyeBatchMat = nullptr;
+    uint8_t *d_A= nullptr;
+    uint8_t *d_Ainv = nullptr;
+    uint8_t *tilingDevice = nullptr;
+    uint8_t *workSpace = nullptr;
+    uint8_t *sync = nullptr;
 
-    CHECK_ACLRT(aclrtMalloc((void**)&d_wBatch, size_wBatch, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACLRT(aclrtMalloc((void**)&d_aWork, size_aWork, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACLRT(aclrtMalloc((void**)&d_workGm, size_workGm, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACLRT(aclrtMalloc((void**)&d_gather1Offset, size_gather1Offset, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACLRT(aclrtMalloc((void**)&d_gather2Offset, size_gather2Offset, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACLRT(aclrtMalloc((void**)&d_gather3Offset, size_gather3Offset, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACLRT(aclrtMalloc((void**)&d_eyeBatchMat, size_eyeBatchMat, ACL_MEM_MALLOC_HUGE_FIRST));
+    auto cleanup = [&]() {
+        if (d_A) aclrtFree(d_A);
+        if (d_Ainv) aclrtFree(d_Ainv);
+        if (d_wBatch) aclrtFree(d_wBatch);
+        if (d_gather1Offset) aclrtFree(d_gather1Offset);
+        if (d_gather2Offset) aclrtFree(d_gather2Offset);
+        if (d_gather3Offset) aclrtFree(d_gather3Offset);
+        if (d_eyeBatchMat) aclrtFree(d_eyeBatchMat);
+        if (d_aWork) aclrtFree(d_aWork);
+        if (d_workGm) aclrtFree(d_workGm);
+        if (tilingDevice) aclrtFree(tilingDevice);
+        if (workSpace) aclrtFree(workSpace);
+    };
 
-    CHECK_ACLRT(aclrtMemcpy(d_wBatch, size_wBatch, host_wBatch, size_wBatch, ACL_MEMCPY_HOST_TO_DEVICE));
-    CHECK_ACLRT(aclrtMemcpy(d_aWork, size_aWork, host_aWork, size_aWork, ACL_MEMCPY_HOST_TO_DEVICE));
-    CHECK_ACLRT(aclrtMemcpy(d_workGm, size_workGm, host_workGm, size_workGm, ACL_MEMCPY_HOST_TO_DEVICE));
+    CHECK_ACLRT(aclrtMalloc((void**)&d_wBatch, size_wBatch, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
+    CHECK_ACLRT(aclrtMalloc((void**)&d_aWork, size_aWork, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
+    CHECK_ACLRT(aclrtMalloc((void**)&d_workGm, size_workGm, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
+    CHECK_ACLRT(aclrtMalloc((void**)&d_gather1Offset, size_gather1Offset, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
+    CHECK_ACLRT(aclrtMalloc((void**)&d_gather2Offset, size_gather2Offset, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
+    CHECK_ACLRT(aclrtMalloc((void**)&d_gather3Offset, size_gather3Offset, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
+    CHECK_ACLRT(aclrtMalloc((void**)&d_eyeBatchMat, size_eyeBatchMat, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
+
+    CHECK_ACLRT(aclrtMemcpy(d_wBatch, size_wBatch, host_wBatch, size_wBatch, ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
+    CHECK_ACLRT(aclrtMemcpy(d_aWork, size_aWork, host_aWork, size_aWork, ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
+    CHECK_ACLRT(aclrtMemcpy(d_workGm, size_workGm, host_workGm, size_workGm, ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
     CHECK_ACLRT(aclrtMemcpy(
-        d_gather1Offset, size_gather1Offset, host_gather1Offset, size_gather1Offset, ACL_MEMCPY_HOST_TO_DEVICE));
+        d_gather1Offset, size_gather1Offset, host_gather1Offset, size_gather1Offset, ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
     CHECK_ACLRT(aclrtMemcpy(
-        d_gather2Offset, size_gather2Offset, host_gather2Offset, size_gather2Offset, ACL_MEMCPY_HOST_TO_DEVICE));
+        d_gather2Offset, size_gather2Offset, host_gather2Offset, size_gather2Offset, ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
     CHECK_ACLRT(aclrtMemcpy(
-        d_gather3Offset, size_gather3Offset, host_gather3Offset, size_gather3Offset, ACL_MEMCPY_HOST_TO_DEVICE));
+        d_gather3Offset, size_gather3Offset, host_gather3Offset, size_gather3Offset, ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
     CHECK_ACLRT(aclrtMemcpy(
-        d_eyeBatchMat, size_eyeBatchMat, host_eyeBatchMat, size_eyeBatchMat, ACL_MEMCPY_HOST_TO_DEVICE));
+        d_eyeBatchMat, size_eyeBatchMat, host_eyeBatchMat, size_eyeBatchMat, ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
 
     uint8_t *hostA = reinterpret_cast<uint8_t *>(A);
     uint8_t *hostAinv = reinterpret_cast<uint8_t *>(Ainv);
     auto sizeA = batchSize * n * n * sizeof(std::complex<float>);
     auto sizeAinv = batchSize * n * n * sizeof(std::complex<float>);
-    uint8_t *d_A= nullptr;
-    uint8_t *d_Ainv = nullptr;
-    CHECK_ACLRT(aclrtMalloc((void **)&d_A, sizeA, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACLRT(aclrtMalloc((void **)&d_Ainv, sizeAinv, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACLRT(aclrtMemcpy(d_A, sizeA, hostA, sizeA, ACL_MEMCPY_HOST_TO_DEVICE));
-    CHECK_ACLRT(aclrtMemcpy(d_Ainv, sizeAinv, hostAinv, sizeAinv, ACL_MEMCPY_HOST_TO_DEVICE));
+    CHECK_ACLRT(aclrtMalloc((void **)&d_A, sizeA, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
+    CHECK_ACLRT(aclrtMalloc((void **)&d_Ainv, sizeAinv, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
+    CHECK_ACLRT(aclrtMemcpy(d_A, sizeA, hostA, sizeA, ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
+    CHECK_ACLRT(aclrtMemcpy(d_Ainv, sizeAinv, hostAinv, sizeAinv, ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
 
     CgetriBatchedTilingData tilingData;
     tilingData.dtype = DTYPE_COMPLEX64;
@@ -216,35 +236,23 @@ aclError aclsolverCgetriBatched(aclsolverHandle_t handle, const int64_t n, std::
     tilingData.blockM = BASE_BLOCK_ELENUM;
     tilingData.blockN = BASE_BLOCK_ELENUM;
     tilingData.tileM = TILE_ELENUM;
-    uint8_t *tilingDevice = nullptr;
-    CHECK_ACLRT(aclrtMalloc((void **)&tilingDevice, sizeof(CgetriBatchedTilingData), ACL_MEM_MALLOC_HUGE_FIRST));
+    CHECK_ACLRT(aclrtMalloc((void **)&tilingDevice, sizeof(CgetriBatchedTilingData), ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
     CHECK_ACLRT(aclrtMemcpy(tilingDevice, sizeof(CgetriBatchedTilingData),
                             &tilingData, sizeof(CgetriBatchedTilingData),
-                            ACL_MEMCPY_HOST_TO_DEVICE));
-    uint8_t *workSpace = nullptr;
-    CHECK_ACLRT(aclrtMalloc((void **)&workSpace, WORKSPACE_SIZE, ACL_MEM_MALLOC_HUGE_FIRST));
+                            ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
+    CHECK_ACLRT(aclrtMalloc((void **)&workSpace, WORKSPACE_SIZE, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
 
-    uint8_t *sync = nullptr;
-    CHECK_ACLRT(aclrtGetHardwareSyncAddr((void **)&sync));
+    CHECK_ACLRT(aclrtGetHardwareSyncAddr((void **)&sync), cleanup());
 
     cgetri_batched_kernel_do(sync, d_A, d_wBatch, d_gather1Offset,
                              d_gather2Offset, d_gather3Offset, d_eyeBatchMat,
                              d_aWork, d_workGm, d_Ainv, workSpace, tilingDevice,
                              numBlocks, stream);
-    aclrtSynchronizeStream(stream);
+    CHECK_ACLRT(aclrtSynchronizeStream(stream), cleanup());
 
-    CHECK_ACLRT(aclrtMemcpy(hostAinv, sizeAinv, d_Ainv, sizeAinv, ACL_MEMCPY_DEVICE_TO_HOST));
+    CHECK_ACLRT(aclrtMemcpy(hostAinv, sizeAinv, d_Ainv, sizeAinv, ACL_MEMCPY_DEVICE_TO_HOST), cleanup());
 
-    aclrtFree(d_A);
-    aclrtFree(d_Ainv);
-    aclrtFree(d_wBatch);
-    aclrtFree(d_gather1Offset);
-    aclrtFree(d_gather2Offset);
-    aclrtFree(d_gather3Offset);
-    aclrtFree(d_eyeBatchMat);
-    aclrtFree(d_aWork);
-    aclrtFree(d_workGm);
-    aclrtFree(tilingDevice);
+    cleanup();
 
     return ACL_SUCCESS;
 }

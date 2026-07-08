@@ -49,7 +49,8 @@ int main(int argc, char **argv) {
     std::cout << "[Input] A:" << std::endl;
     PrintPartOfMatrix<float>((uint8_t *)A, M, N, 8, 8);
 
-    int32_t *info;
+    int32_t infoVal = 0;
+    int32_t *info = &infoVal;
 
     auto ret = aclsolverSgetri(handle, N, A, N, info);
     CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverSgetri failed. ERROR: %d\n", ret); return ret);

@@ -50,7 +50,8 @@ int main(int argc, char **argv) {
     PrintPartOfMatrix<float>((uint8_t *)A, M, N, 8, 8);
 
     int32_t *ipiv = new int32_t[std::min(M, N)];
-    int32_t *info;
+    int32_t infoVal = 0;
+    int32_t *info = &infoVal;
 
     auto ret = aclsolverCgetrf(handle, M, N, A, N, ipiv, info);
     CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverCgetrf failed. ERROR: %d\n", ret); return ret);
