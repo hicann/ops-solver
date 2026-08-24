@@ -23,6 +23,16 @@
 using namespace AscendC;
 using namespace matmul;
 
+// Runtime check for critical kernel constraints: assert() is compiled out in
+// release builds (NDEBUG), so buffer-size/shape invariants must be guarded by
+// an explicit branch (see issue #12).
+#define SOLVER_KERNEL_CHECK(cond, action) \
+    do {                                  \
+        if (!(cond)) {                    \
+            action;                       \
+        }                                 \
+    } while (0)
+
 template<typename T>
 class LUCustom1 { // for M * N <= 8192
     GlobalTensor<T> aGlobalReal;
@@ -57,8 +67,8 @@ public:
     }
     __aicore__ inline void Process(int MatAOffset, int offsetM, int offsetN, int blockM, int realM, int realN)
     {
-        assert(blockM * blockN <= 8192);
-        assert(blockM >= blockN);
+        SOLVER_KERNEL_CHECK(blockM * blockN <= 8192, return);
+        SOLVER_KERNEL_CHECK(blockM >= blockN, return);
         this->blockM = blockM;
         this->realM = realM;
         LocalTensor<T> srcLocalReal;
@@ -149,6 +159,9 @@ private:
         T realScalar = srcLocalReal.GetValue(offset + (blockM - 1 - k));
         T imagScalar = srcLocalImag.GetValue(offset + (blockM - 1 - k));
         T denominator = realScalar * realScalar + imagScalar * imagScalar;
+        // Guard against zero pivot (singular matrix): division by zero would
+        // produce NaN/Inf and silently corrupt the LU factors (issue #29/#92).
+        SOLVER_KERNEL_CHECK(denominator != T(0), denominator = T(1); realScalar = T(0); imagScalar = T(0));
         T realInvScalar = realScalar / denominator;
         T imagInvScalar = imagScalar / denominator;
         PipeBarrier<PIPE_ALL>();
@@ -330,6 +343,9 @@ private:
         T realScalar = colLocalReal[idx].GetValue(blockM - 1 - k);
         T imagScalar = colLocalImag[idx].GetValue(blockM - 1 - k);
         T denominator = realScalar * realScalar + imagScalar * imagScalar;
+        // Guard against zero pivot (singular matrix): division by zero would
+        // produce NaN/Inf and silently corrupt the LU factors (issue #29/#92).
+        SOLVER_KERNEL_CHECK(denominator != T(0), denominator = T(1); realScalar = T(0); imagScalar = T(0));
         T realInvScalar = realScalar / denominator;
         T imagInvScalar = imagScalar / denominator;
         PipeBarrier<PIPE_ALL>();

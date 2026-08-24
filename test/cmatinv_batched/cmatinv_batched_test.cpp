@@ -42,7 +42,20 @@ int32_t main(int32_t argc, char *argv[])
     CHECK_ACL(aclsolverSetStream(handle, stream));
 
     size_t aMatrixFileSize = batchSize * n * n * sizeof(std::complex<float>);
-    std::complex<float>* A;
+    std::complex<float>* A = nullptr;
+    auto cleanup = [&]() -> aclError {
+        if (A != nullptr) {
+            CHECK_ACL(aclrtFreeHost(A));
+        }
+        CHECK_ACL(aclrtDestroyStream(stream));
+        if (handle != nullptr) {
+            CHECK_ACL(aclsolverDestroy(handle));
+        }
+        CHECK_ACL(aclrtResetDevice(deviceId));
+        CHECK_ACL(aclFinalize());
+        return ACL_SUCCESS;
+    };
+
     CHECK_ACL(aclrtMallocHost((void**)(&A), aMatrixFileSize));
     ReadFile("./test/cmatinv_batched/data/input/A_gm.bin", aMatrixFileSize, A, aMatrixFileSize);
     std::vector<std::complex<float>> Ainv(batchSize * n * n, {-1.0f, -1.0f});
@@ -54,18 +67,15 @@ int32_t main(int32_t argc, char *argv[])
     printTensor(Ainv.data(), batchSize, n, n);
 
     auto ret = aclsolverCmatinvBatched(handle, n, A, n, Ainv.data(), n, info.data(), batchSize);
-    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverCmatinvBatched failed. ERROR: %d\n", ret); return ret);
+    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverCmatinvBatched failed. ERROR: %d\n", ret); cleanup(); return ret);
 
     std::cout << "[Output] Ainv:" << std::endl;
     printTensor(Ainv.data(), batchSize, n, n);
 
     WriteFile("./test/cmatinv_batched/data/output/Ainv_gm.bin", Ainv.data(), aMatrixFileSize);
 
-    CHECK_ACL(aclrtFreeHost(A));
-    CHECK_ACL(aclrtDestroyStream(stream));
-    CHECK_ACL(aclsolverDestroy(handle));
-    CHECK_ACL(aclrtResetDevice(deviceId));
-    CHECK_ACL(aclFinalize());
+    auto cleanupRet = cleanup();
+    CHECK_RET(cleanupRet == ACL_SUCCESS, return cleanupRet);
 
     return 0;
 }

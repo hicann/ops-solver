@@ -20,6 +20,16 @@
 using namespace AscendC;
 using namespace matmul;
 
+// Runtime check for critical kernel constraints: assert() is compiled out in
+// release builds (NDEBUG), so buffer-size/shape invariants must be guarded by
+// an explicit branch (see issue #12).
+#define SOLVER_KERNEL_CHECK(cond, action) \
+    do {                                  \
+        if (!(cond)) {                    \
+            action;                       \
+        }                                 \
+    } while (0)
+
 #define debug(x) printf("%s: %d\n", #x, x)
 #define debugf(x) printf("%s: %f\n", #x, x)
 #define puts(x) printf("%s\n", x)
@@ -52,8 +62,8 @@ public:
         pipe->InitBuffer(workBuf, TILE_LENGTH * sizeof(T));
     }
     __aicore__ inline void Process(int MatAOffset, int offsetM, int offsetN, int blockM, int realM, int realN) {
-        assert(blockM * blockN <= 8192);
-        assert(blockM >= blockN);
+        SOLVER_KERNEL_CHECK(blockM * blockN <= 8192, return);
+        SOLVER_KERNEL_CHECK(blockM >= blockN, return);
         this->blockM = blockM;
         this->realM = realM;
         LocalTensor<T> srcLocal;
@@ -159,7 +169,7 @@ public:
         pipe->InitBuffer(workBuf, TILE_LENGTH * sizeof(T));
     }
     __aicore__ inline void Process(int offsetM, int offsetN, int blockM) {
-        assert(blockM * blockN <= 8192 * 2);
+        SOLVER_KERNEL_CHECK(blockM * blockN <= 8192 * 2, return);
         this->blockM = blockM;
         int offset = offsetM + offsetN * M;
         {   // CopyIn
@@ -268,8 +278,8 @@ public:
 
         this->blockNum = 8;
         this->lineCount = blockN / blockNum;
-        assert(blockN % blockNum == 0);
-        assert(lineCount <= 2);
+        SOLVER_KERNEL_CHECK(blockNum > 0 && blockN % blockNum == 0, lineCount = 0; return);
+        SOLVER_KERNEL_CHECK(lineCount <= 2, lineCount = 2);
 
         elementsPerBlock = 32 / sizeof(T);
         for (int i = 0; i < lineCount; ++i) {

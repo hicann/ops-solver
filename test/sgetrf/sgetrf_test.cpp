@@ -41,19 +41,37 @@ int main(int argc, char **argv) {
 
     size_t aMatrixFileSize = M * N * sizeof(float);
 
-    float* A;
+    float* A = nullptr;
+    int32_t *ipiv = nullptr;
+    auto cleanup = [&]() -> aclError {
+        if (ipiv != nullptr) {
+            delete[] ipiv;
+            ipiv = nullptr;
+        }
+        if (A != nullptr) {
+            CHECK_ACL(aclrtFreeHost(A));
+        }
+        CHECK_ACL(aclrtDestroyStream(stream));
+        if (handle != nullptr) {
+            CHECK_ACL(aclsolverDestroy(handle));
+        }
+        CHECK_ACL(aclrtResetDevice(deviceId));
+        CHECK_ACL(aclFinalize());
+        return ACL_SUCCESS;
+    };
+
     CHECK_ACL(aclrtMallocHost((void**)(&A), aMatrixFileSize));
     ReadFile("./test/sgetrf/data/input/A_gm.bin", aMatrixFileSize, A, aMatrixFileSize);
 
     std::cout << "[Input] A:" << std::endl;
     PrintPartOfMatrix<float>((uint8_t *)A, M, N, 8, 8);
 
-    int32_t *ipiv = new int32_t[std::min(M, N)];
+    ipiv = new int32_t[std::min(M, N)];
     int32_t infoVal = 0;
     int32_t *info = &infoVal;
 
     auto ret = aclsolverSgetrf(handle, M, N, A, N, ipiv, info);
-    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverSgetrf failed. ERROR: %d\n", ret); return ret);
+    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverSgetrf failed. ERROR: %d\n", ret); cleanup(); return ret);
 
     std::cout << "[Output] A (LU):" << std::endl;
     PrintPartOfMatrix<float>((uint8_t *)A, M, N, 8, 8);
@@ -64,12 +82,8 @@ int main(int argc, char **argv) {
     std::vector<int32_t> ipivData(ipiv, ipiv + std::min(M, N));
     WriteFile("./test/sgetrf/data/output/W_gm.bin", ipivData.data(), ipivData.size() * sizeof(int32_t));
 
-    delete[] ipiv;
-    CHECK_ACL(aclrtFreeHost(A));
-    CHECK_ACL(aclrtDestroyStream(stream));
-    CHECK_ACL(aclsolverDestroy(handle));
-    CHECK_ACL(aclrtResetDevice(deviceId));
-    CHECK_ACL(aclFinalize());
+    auto cleanupRet = cleanup();
+    CHECK_RET(cleanupRet == ACL_SUCCESS, return cleanupRet);
 
     return 0;
 }

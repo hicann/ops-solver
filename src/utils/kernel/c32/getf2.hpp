@@ -20,6 +20,16 @@
 #include "kernel_operator.h"
 #include <lib/matrix/matmul/matmul.h>
 
+// Runtime check for critical kernel constraints: assert() is compiled out in
+// release builds (NDEBUG), so buffer-size/shape invariants must be guarded by
+// an explicit branch (see issue #12).
+#define SOLVER_KERNEL_CHECK(cond, action) \
+    do {                                  \
+        if (!(cond)) {                    \
+            action;                       \
+        }                                 \
+    } while (0)
+
 using namespace AscendC;
 using namespace matmul;
 
@@ -55,8 +65,8 @@ public:
         pipe->InitBuffer(workBuf, TILE_LENGTH * sizeof(T));
     }
     __aicore__ inline void Process(int MatAOffset, int offsetM, int offsetN, int blockM, int realM, int realN) {
-        assert(blockM * blockN <= 8192);
-        assert(blockM >= blockN);
+        SOLVER_KERNEL_CHECK(blockM * blockN <= 8192, return);
+        SOLVER_KERNEL_CHECK(blockM >= blockN, return);
         this->blockM = blockM;
         this->realM = realM;
         LocalTensor<T> srcLocal;

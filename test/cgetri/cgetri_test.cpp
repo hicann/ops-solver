@@ -43,7 +43,20 @@ int main(int argc, char **argv) {
     int t = (std::min(M, N) + 15) / 16 * 16;
     size_t aMatrixFileSize = M * N * sizeof(float) * 2;
 
-    std::complex<float>* A;
+    std::complex<float>* A = nullptr;
+    auto cleanup = [&]() -> aclError {
+        if (A != nullptr) {
+            CHECK_ACL(aclrtFreeHost(A));
+        }
+        CHECK_ACL(aclrtDestroyStream(stream));
+        if (handle != nullptr) {
+            CHECK_ACL(aclsolverDestroy(handle));
+        }
+        CHECK_ACL(aclrtResetDevice(deviceId));
+        CHECK_ACL(aclFinalize());
+        return ACL_SUCCESS;
+    };
+
     CHECK_ACL(aclrtMallocHost((void**)(&A), aMatrixFileSize));
     ReadFile("./test/cgetri/data/input/A_gm.bin", aMatrixFileSize, A, aMatrixFileSize);
 
@@ -54,18 +67,15 @@ int main(int argc, char **argv) {
     int32_t *info = &infoVal;
 
     auto ret = aclsolverCgetri(handle, N, A, N, info);
-    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverCgetri failed. ERROR: %d\n", ret); return ret);
+    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclsolverCgetri failed. ERROR: %d\n", ret); cleanup(); return ret);
 
     std::cout << "[Output] A (inverse):" << std::endl;
     PrintPartOfMatrix<float>((uint8_t *)A, M, N, 8, 8);
 
     WriteFile("./test/cgetri/data/output/A_gm.bin", A, aMatrixFileSize);
 
-    CHECK_ACL(aclrtFreeHost(A));
-    CHECK_ACL(aclrtDestroyStream(stream));
-    CHECK_ACL(aclsolverDestroy(handle));
-    CHECK_ACL(aclrtResetDevice(deviceId));
-    CHECK_ACL(aclFinalize());
+    auto cleanupRet = cleanup();
+    CHECK_RET(cleanupRet == ACL_SUCCESS, return cleanupRet);
 
     return 0;
 }
