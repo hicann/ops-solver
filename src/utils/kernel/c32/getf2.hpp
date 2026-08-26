@@ -247,8 +247,11 @@ private:
         Abs(workLocal, colLocal[idx], blockM - k);
         if (blockM != realM) Duplicate(workLocal, T(-1), blockM - realM);
         ReduceMax(workLocal, workLocal, workLocal, blockM - k, true);
-        workQueue.FreeTensor(workLocal);
+        // 先读结果再归还 tensor：FreeTensor 后句柄失效，读取已释放内存构成
+        // use-after-free；并按 c64 版实现补 ReduceMax 后的同步屏障（issue #93）
+        PipeBarrier<PIPE_ALL>();
         T maxIndex = workLocal.GetValue(1);
+        workQueue.FreeTensor(workLocal);
         return *reinterpret_cast<uint32_t*>(&maxIndex);
     }
     __aicore__ inline void swap(int a, int b, LocalTensor<T> &colLocal) {
