@@ -1,16 +1,91 @@
-# 从零开始为 Solver 库开发一个 CmatinvBatched 算子
+# 快速入门：基于ops-solver仓
 
-本教程以能够运行为第一目标，先不追求性能极致，力求让第一次接触Solver的开发者 30 分钟内能在本地看到结果。
+## 使用须知
 
-## 算子开发实例
+本指南旨在帮助您快速上手CANN和`ops-solver`算子仓的使用。为方便快速了解算子开发全流程，将以**cmatinv_batched**算子为实践对象，算子源码按芯片架构区分目录（A2/A3 平台对应 `arch22/`，Ascend 950 PR/DT 对应 `arch35/`），以下以 Ascend 950 硬件平台为例。
 
-我们以CmatinvBatched算子（批量复数矩阵求逆算子）为例，说明基于Solver库开发一个算子的主要流程。
+1. **[环境准备](#环境准备)**：完成软件包安装和源码下载，此处不再赘述。快速入门场景下，**推荐WebIDE或Docker环境**，安装操作简单。
+
+   > **说明**：当前WebIDE或Docker环境默认最新商发版CANN包；如需体验master分支最新能力，可手动安装CANN包，注意软件与源码版本配套。
+
+2. **[编译运行](#一编译运行)**：编译自定义算子包并安装，实现快速调用算子。
+
+3. **[算子开发](#二算子开发)**：通过修改现有算子Kernel，体验开发、编译、验证的完整闭环。
+
+4. **[算子调试](#三算子调试)**：掌握算子打印和性能采集方法。
 
 ## 环境准备
 
 **[环境部署](zh/install/quick_install.md)**：完成软件包安装和源码下载，此处不再赘述。快速入门场景下，**推荐WebIDE或Docker环境**，安装操作简单。
 
-   > **说明**：当前WebIDE或Docker环境默认最新商发版CANN包；如需体验master分支最新能力，可手动安装CANN包，注意软件与源码版本配套。
+> **说明**：当前WebIDE或Docker环境默认最新商发版CANN包；如需体验master分支最新能力，可手动安装CANN包，注意软件与源码版本配套。
+
+---
+
+## 一、编译运行
+
+本阶段目的是**快速体验项目标准流程**，验证环境能否成功进行算子源码编译、打包、安装和运行。
+
+### 1. 编译cmatinv_batched算子
+
+环境准备好后（注意软件与源码版本配套），进入环境并访问项目源码根目录，编译指定算子。
+
+通用编译命令格式：`bash build.sh --pkg --soc=<芯片版本> --ops=<算子名>`。以cmatinv_batched算子为例，编译命令如下：
+
+```bash
+bash build.sh --pkg --soc=ascend950 --ops=cmatinv_batched
+```
+
+若提示如下信息，说明编译成功。
+```bash
+Self-extractable archive "cann-ops-solver_${cann_version}_linux-${arch}.run" successfully created.
+```
+编译成功后，run包存放于项目根目录的build_out目录下。
+
+### 2. 安装cmatinv_batched算子包
+
+> **说明**：run包必须通过`--install`参数执行安装，不带参数仅显示帮助信息不会安装。可通过`--install-path=<路径>`指定安装目录，默认安装路径：root用户为`/usr/local/Ascend`，普通用户为`~/Ascend`。
+```bash
+./build_out/cann-ops-solver_${version}_linux-${arch}.run --install --quiet
+```
+
+### 3. 快速验证：运行算子样例
+
+通用的运行命令格式：`bash build.sh --soc=${soc_version} --ops=<算子名> --run`。
+
+以cmatinv_batched算子为例，运行该样例验证算子功能是否正常。
+
+```bash
+bash build.sh --soc=ascend950 --ops=cmatinv_batched --run
+```
+预期输出：打印算子`cmatinv_batched`的计算结果，表明算子已成功部署并正确执行。
+
+> **提示**：若已完成编译且仅需重新验证功能，可直接运行已编译的二进制文件，无需再次编译。编译完成后，测试二进制文件位于`build/test/<算子名>/<算子名>_test`，直接执行即可：
+>
+> ```bash
+> ./build/test/cmatinv_batched/cmatinv_batched_test
+> ```
+
+## 二、算子开发
+
+以下为从零开发一个 Solver 算子的完整流程。
+
+## 三、算子调试
+
+### 1. 打印
+
+在Kernel代码中使用`DPrintf`进行调试打印，编译运行后可在日志中查看输出。
+
+### 2. 性能采集
+
+使用msprof工具进行性能采集，具体参考[CANN性能采集文档](https://www.hiascend.com/document/detail/zh/canncommercial/700/inferapplicationdev/aclcppdevg/aclcppdevg_0000.html)。
+
+---
+
+## 算子开发实例
+
+我们以CmatinvBatched算子（批量复数矩阵求逆算子）为例，说明基于Solver库开发一个算子的主要流程。
+
 
 ## 算子功能
 

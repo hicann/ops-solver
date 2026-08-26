@@ -41,7 +41,7 @@ git clone -b ${tag_version} https://gitcode.com/cann/ops-solver.git
 ## 💬相关信息
 
 - [目录结构](docs/zh/install/dir_structure.md)
-- [接口列表](docs/zh/api_list.md)
+- [接口列表](docs/api_list.md)
 - [贡献指南](CONTRIBUTING.md)
 - [安全声明](SECURITY.md)
 - [许可证](LICENSE)
