@@ -1,38 +1,36 @@
 /**
-* Copyright (c) 2026 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file cmatinv_batched_host.cpp
  * \brief
  */
 
+#include <securec.h>
+
+#include <algorithm>
+#include <complex>
 #include <cstdint>
 #include <iostream>
-#include <complex>
-#include <vector>
-#include <algorithm>
 #include <iterator>
-#include <securec.h>
-#include "acl/acl.h"
-#include "tiling/platform/platform_ascendc.h"
-#include "cann_ops_solver.h"
+#include <vector>
+
 #include "../utils/assert.h"
+#include "acl/acl.h"
+#include "cann_ops_solver.h"
+#include "tiling/platform/platform_ascendc.h"
 
+#define GM_ADDR uint8_t *
 
-#define GM_ADDR uint8_t*
-
-extern void cmatinv_batched_kernel_do(GM_ADDR dA, GM_ADDR dUniReal,
-                                      GM_ADDR dUniImag, GM_ADDR dOffset,
-                                      GM_ADDR dAinv, GM_ADDR workSpace,
-                                      GM_ADDR tilingGm, uint32_t numBlocks,
-                                      void *stream);
+extern void cmatinv_batched_kernel_do(GM_ADDR dA, GM_ADDR dUniReal, GM_ADDR dUniImag, GM_ADDR dOffset, GM_ADDR dAinv,
+                                      GM_ADDR workSpace, GM_ADDR tilingGm, uint32_t numBlocks, void *stream);
 
 static constexpr uint32_t COMPLEX_ELENUM = 2;
 static constexpr uint32_t MAX_CORE_CNT = 40;
@@ -47,10 +45,11 @@ static constexpr int64_t DTYPE_COMPLEX64 = 1;
 
 static constexpr int ELEMENT_NUM_PER_BLOCK = 8;
 static constexpr int ELEMENT_NUM_PER_REPEAT = 64;
-static constexpr uint32_t BASE_COMPLEX64_NUM = 8192; // 64kb / 8b
-static constexpr uint32_t MAX_COMPUTE_NUM = 128; // max compute num per repeat
+static constexpr uint32_t BASE_COMPLEX64_NUM = 8192;  // 64kb / 8b
+static constexpr uint32_t MAX_COMPUTE_NUM = 128;      // max compute num per repeat
 
-struct CmatinvBatchedTilingData {
+struct CmatinvBatchedTilingData
+{
     uint32_t dtype;
     uint32_t n;
     uint32_t startOffset[40];
@@ -61,38 +60,47 @@ CmatinvBatchedTilingData CalTilingData(uint32_t vecCoreNum, uint32_t dtype, uint
 {
     CmatinvBatchedTilingData tilingData;
 
-    if (vecCoreNum == 0) {
+    if (vecCoreNum == 0)
+    {
         vecCoreNum = 1;
     }
 
     vecCoreNum = vecCoreNum > MAX_CORE_CNT ? MAX_CORE_CNT : vecCoreNum;
-    vecCoreNum = (vecCoreNum == 0) ? 1 : vecCoreNum;
 
     // init tiling data
-    for (uint32_t i = 0; i < MAX_CORE_CNT; i++) {
+    for (uint32_t i = 0; i < MAX_CORE_CNT; i++)
+    {
         tilingData.startOffset[i] = 0;
         tilingData.calNum[i] = 0;
     }
 
     uint32_t matPerCore = batchSize / vecCoreNum;
     uint32_t remainMatNum = batchSize % vecCoreNum;
-    if (matPerCore == 0) {
-        for (uint32_t i = 0; i < remainMatNum; i++) {
+    if (matPerCore == 0)
+    {
+        for (uint32_t i = 0; i < remainMatNum; i++)
+        {
             tilingData.calNum[i] = 1;
-            tilingData.startOffset[i] = i * n * n * COMPLEX_ELENUM; // complex element num
+            tilingData.startOffset[i] = i * n * n * COMPLEX_ELENUM;  // complex element num
         }
-    } else {
+    }
+    else
+    {
         uint32_t currComputeNum;
         uint32_t currOffset = 0;
-        for (uint32_t i = 0; i < vecCoreNum; i++) {
-            if (i < remainMatNum) {
+        for (uint32_t i = 0; i < vecCoreNum; i++)
+        {
+            if (i < remainMatNum)
+            {
                 currComputeNum = matPerCore + 1;
-            } else {
+            }
+            else
+            {
                 currComputeNum = matPerCore;
             }
             tilingData.calNum[i] = currComputeNum;
             tilingData.startOffset[i] = currOffset;
-            currOffset += currComputeNum * n * n * COMPLEX_ELENUM; // complex element num
+            currOffset += currComputeNum * n * n * COMPLEX_ELENUM;  // complex element num
         }
     }
     tilingData.dtype = dtype;
@@ -101,36 +109,43 @@ CmatinvBatchedTilingData CalTilingData(uint32_t vecCoreNum, uint32_t dtype, uint
     return tilingData;
 }
 
-aclError aclsolverCmatinvBatched(aclsolverHandle_t handle, const int64_t n, std::complex<float> *A,
-                                 const int64_t lda, std::complex<float> *Ainv,
-                                 const int64_t lda_inv, int32_t *info,
-                                 int64_t batchSize) {
+aclError aclsolverCmatinvBatched(aclsolverHandle_t handle, const int64_t n, std::complex<float> *A, const int64_t lda,
+                                 std::complex<float> *Ainv, const int64_t lda_inv, int32_t *info, int64_t batchSize)
+{
     aclrtStream stream = nullptr;
-    if (handle != nullptr) {
+    if (handle != nullptr)
+    {
         aclsolverGetStream(handle, &stream);
     }
 
-    if (n >= MATRIX_SHAPE_LIMIT) {
-        LOG_PRINT("CmatinvBatched only supports n < 32. For n >= 32, use CgetriBatched instead.\n");
-        return aclsolverCgetriBatched(handle, n, A, lda, Ainv, lda_inv, info, batchSize);
-    }
-    
     auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
     uint32_t numBlocks = 0;
-    if (ascendcPlatform != nullptr) {
+    if (ascendcPlatform != nullptr)
+    {
         numBlocks = ascendcPlatform->GetCoreNumAiv();
     }
-    if (numBlocks > 40) {
+    if (numBlocks > 40)
+    {
         numBlocks = 40;
     }
 
-    SOLVER_ECHECK(n > 0 && batchSize > 0 && lda > 0 && lda_inv > 0 &&
-                  A != nullptr && Ainv != nullptr && info != nullptr,
-                  "CmatinvBatched get invalid param: n, batchSize, lda, lda_inv <= 0, or A, Ainv, info is nullptr.",
-                  ACL_ERROR_INVALID_PARAM);
+    SOLVER_ECHECK(
+        n > 0 && batchSize > 0 && lda > 0 && lda_inv > 0 && A != nullptr && Ainv != nullptr && info != nullptr,
+        "CmatinvBatched get invalid param: n, batchSize, lda, lda_inv <= 0, or A, Ainv, info is nullptr.",
+        ACL_ERROR_INVALID_PARAM);
     SOLVER_ECHECK(n <= MAX_MATRIX_SHAPE && batchSize <= MAX_MATRIX_BATCH,
-                  "CmatinvBatched get n <= 256 || batchSize <= 3000.",
+                  "CmatinvBatched get n > 256 or batchSize > 3000, which exceeds the supported limit.",
                   ACL_ERROR_INVALID_PARAM);
+    SOLVER_ECHECK(lda == n && lda_inv == n,
+                  "CmatinvBatched only supports lda == n and lda_inv == n in current version.",
+                  ACL_ERROR_INVALID_PARAM);
+
+    // 参数校验完成后, n >= 32 的场景按 CgetriBatched 语义执行(适用其约束)
+    if (n >= MATRIX_SHAPE_LIMIT)
+    {
+        LOG_PRINT("CmatinvBatched only supports n < 32. For n >= 32, use CgetriBatched instead.\n");
+        return aclsolverCgetriBatched(handle, n, A, lda, Ainv, lda_inv, info, batchSize);
+    }
 
     uint32_t N = static_cast<uint32_t>(n);
     uint32_t alignedN = (N + (ELEMENT_NUM_PER_BLOCK - 1)) / ELEMENT_NUM_PER_BLOCK * ELEMENT_NUM_PER_BLOCK;
@@ -142,24 +157,30 @@ aclError aclsolverCmatinvBatched(aclsolverHandle_t handle, const int64_t n, std:
     std::vector<float> uniMatRealData(N * alignedN, 0.0f);
     std::vector<float> uniBatchImagData(N * alignedN * computeNumPerRepeat, 0.0f);
     std::vector<float> uniMatImagData(N * alignedN, 0.0f);
-    for (uint32_t rowIdx = 0; rowIdx < N; rowIdx++) {
-        for (uint32_t colIdx = 0; colIdx < alignedN; colIdx++) {
-            if (rowIdx == colIdx) {
+    for (uint32_t rowIdx = 0; rowIdx < N; rowIdx++)
+    {
+        for (uint32_t colIdx = 0; colIdx < alignedN; colIdx++)
+        {
+            if (rowIdx == colIdx)
+            {
                 uniMatRealData[alignedN * rowIdx + colIdx] = 1.0f;
-            } else {
+            }
+            else
+            {
                 uniMatRealData[alignedN * rowIdx + colIdx] = 0.0f;
             }
             uniMatImagData[alignedN * rowIdx + colIdx] = 0.0f;
         }
     }
     errno_t rc;
-    for (uint32_t i = 0; i < computeNumPerRepeat; i++) {
-        rc = memcpy_s(static_cast<float *>(uniBatchRealData.data() + N * alignedN * i),
-            N * alignedN * sizeof(float), uniMatRealData.data(), N * alignedN * sizeof(float));
+    for (uint32_t i = 0; i < computeNumPerRepeat; i++)
+    {
+        rc = memcpy_s(static_cast<float *>(uniBatchRealData.data() + N * alignedN * i), N * alignedN * sizeof(float),
+                      uniMatRealData.data(), N * alignedN * sizeof(float));
         SOLVER_ECHECK(rc == EOK, "Repeat uniMatRealData by memcpy_s failed.", ACL_ERROR_INTERNAL_ERROR);
-        rc = memcpy_s(static_cast<float *>(uniBatchImagData.data() + N * alignedN * i),
-            N * alignedN * sizeof(float), uniMatImagData.data(), N * alignedN * sizeof(float));
-        SOLVER_ECHECK(rc == EOK, "Repeat uniMatImagData by memcpy_s failed.",ACL_ERROR_INTERNAL_ERROR);
+        rc = memcpy_s(static_cast<float *>(uniBatchImagData.data() + N * alignedN * i), N * alignedN * sizeof(float),
+                      uniMatImagData.data(), N * alignedN * sizeof(float));
+        SOLVER_ECHECK(rc == EOK, "Repeat uniMatImagData by memcpy_s failed.", ACL_ERROR_INTERNAL_ERROR);
     }
 
     uint32_t offsetSize = N * alignedN * computeNumPerRepeat * 2;
@@ -168,9 +189,12 @@ aclError aclsolverCmatinvBatched(aclsolverHandle_t handle, const int64_t n, std:
     uint32_t k = 0;
     uint32_t realBase = 0;
     uint32_t imagBase = 32 * 1024;
-    for (uint32_t batchIdx = 0; batchIdx < computeNumPerRepeat; batchIdx++) {
-        for (uint32_t rowIdx = 0; rowIdx < N; rowIdx++) {
-            for (uint32_t colIdx = 0; colIdx < N; colIdx++) {
+    for (uint32_t batchIdx = 0; batchIdx < computeNumPerRepeat; batchIdx++)
+    {
+        for (uint32_t rowIdx = 0; rowIdx < N; rowIdx++)
+        {
+            for (uint32_t colIdx = 0; colIdx < N; colIdx++)
+            {
                 offsetData[k++] = realBase + sizeof(uint32_t) * (batchIdx * alignedN * N + alignedN * rowIdx + colIdx);
                 offsetData[k++] = imagBase + sizeof(uint32_t) * (batchIdx * alignedN * N + alignedN * rowIdx + colIdx);
             }
@@ -196,7 +220,8 @@ aclError aclsolverCmatinvBatched(aclsolverHandle_t handle, const int64_t n, std:
     uint8_t *tilingDevice = nullptr;
     uint8_t *workSpace = nullptr;
 
-    auto cleanup = [&]() {
+    auto cleanup = [&]()
+    {
         if (d_A) aclrtFree(d_A);
         if (d_UniReal) aclrtFree(d_UniReal);
         if (d_UniImag) aclrtFree(d_UniImag);
@@ -218,10 +243,11 @@ aclError aclsolverCmatinvBatched(aclsolverHandle_t handle, const int64_t n, std:
     CHECK_ACLRT(aclrtMemcpy(d_Offset, sizeOffset, hostOffset, sizeOffset, ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
 
     CmatinvBatchedTilingData tiling = CalTilingData(numBlocks, DTYPE_COMPLEX64, n, batchSize);
-    CHECK_ACLRT(aclrtMalloc((void **)&tilingDevice, sizeof(CmatinvBatchedTilingData), ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
-    CHECK_ACLRT(aclrtMemcpy(tilingDevice, sizeof(CmatinvBatchedTilingData),
-                            &tiling, sizeof(CmatinvBatchedTilingData),
-                            ACL_MEMCPY_HOST_TO_DEVICE), cleanup());
+    CHECK_ACLRT(aclrtMalloc((void **)&tilingDevice, sizeof(CmatinvBatchedTilingData), ACL_MEM_MALLOC_HUGE_FIRST),
+                cleanup());
+    CHECK_ACLRT(aclrtMemcpy(tilingDevice, sizeof(CmatinvBatchedTilingData), &tiling, sizeof(CmatinvBatchedTilingData),
+                            ACL_MEMCPY_HOST_TO_DEVICE),
+                cleanup());
     CHECK_ACLRT(aclrtMalloc((void **)&workSpace, WORKSPACE_SIZE, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
 
     cmatinv_batched_kernel_do(d_A, d_UniReal, d_UniImag, d_Offset, d_Ainv, workSpace, tilingDevice, numBlocks, stream);

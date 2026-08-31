@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2026 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file lu_custom.hpp
@@ -16,10 +16,12 @@
 #ifndef _LU_CUSTOM_HPP_
 #define _LU_CUSTOM_HPP_
 
-#include <cstdint>
 #include <lib/matrix/matmul/matmul.h>
-#include "kernel_operator.h"
+
+#include <cstdint>
+
 #include "getf2.hpp"
+#include "kernel_operator.h"
 #include "trsm.hpp"
 
 using namespace AscendC;
@@ -27,8 +29,9 @@ using namespace matmul;
 
 #define ceil(x, y) (((x) + (y) - 1) / (y) * (y))
 
-template<typename T>
-class GTRF2Solver {
+template <typename T>
+class GTRF2Solver
+{
     TransPose<T> optranspose;
     LUCustom1<T> opLU1;
     LUCustom3<T> opLU3;
@@ -48,9 +51,13 @@ class GTRF2Solver {
     int blockIdx;
     TBufPool<TPosition::VECCALC, 16> *pipe;
     static constexpr int TILE_LENGTH = 8192;
-public:
+
+   public:
     __aicore__ inline GTRF2Solver() {}
-    __aicore__ inline void Init(TBufPool<TPosition::VECCALC, 16> *pipe, GlobalTensor<T> aGlobalReal, GlobalTensor<T> aGlobalImag, GlobalTensor<T> workGlobal, GlobalTensor<uint32_t> wGlobal, GlobalTensor<uint32_t> gather1, GlobalTensor<uint32_t> gather2, int M, int orgM, int N, int blockN, int workM, int tileM)
+    __aicore__ inline void Init(TBufPool<TPosition::VECCALC, 16> *pipe, GlobalTensor<T> aGlobalReal,
+                                GlobalTensor<T> aGlobalImag, GlobalTensor<T> workGlobal, GlobalTensor<uint32_t> wGlobal,
+                                GlobalTensor<uint32_t> gather1, GlobalTensor<uint32_t> gather2, int M, int orgM, int N,
+                                int blockN, int workM, int tileM)
     {
         this->pipe = pipe;
         this->aGlobalReal = aGlobalReal;
@@ -70,39 +77,52 @@ public:
     }
     __aicore__ inline void Process(int offsetM, int offsetN, int blockM, int realN)
     {
-        if (blockM > 512) {
-            if (blockIdx >= 8) {
+        if (blockM > 512)
+        {
+            if (blockIdx >= 8)
+            {
                 CrossCoreSetFlag<0x0, PIPE_MTE3>(0x6);
                 CrossCoreSetFlag<0x0, PIPE_MTE3>(0x6);
                 return;
             }
-            if (!offsetM) {
+            if (!offsetM)
+            {
                 pipe->InitBuffer(inQueueSrc1, 1, 8192 * sizeof(T));
                 pipe->InitBuffer(inQueueSrc2, 1, 8192 * sizeof(T));
                 pipe->InitBuffer(outQueueDst, 1, 8192 * sizeof(T));
-                optranspose.Init(pipe, inQueueSrc1, inQueueSrc2, outQueueDst, aGlobalReal, aGlobalImag, workGlobalReal, workGlobalImag, gather1, gather2, workM, N, tileM, blockN);
-                opLU3.Init(pipe, inQueueSrc1, inQueueSrc2, outQueueDst, workGlobalReal, workGlobalImag, wGlobal, workM, blockN, blockN);
+                optranspose.Init(pipe, inQueueSrc1, inQueueSrc2, outQueueDst, aGlobalReal, aGlobalImag, workGlobalReal,
+                                 workGlobalImag, gather1, gather2, workM, N, tileM, blockN);
+                opLU3.Init(pipe, inQueueSrc1, inQueueSrc2, outQueueDst, workGlobalReal, workGlobalImag, wGlobal, workM,
+                           blockN, blockN);
             }
-            int totolBlocks = (blockM + tileM - 1) / tileM;
+            int totalBlocks = (blockM + tileM - 1) / tileM;
             int transposeM1 = 0;
             int transposeM2 = 0;
-            if ((blockIdx + 1) * tileM <= blockM) {
+            if ((blockIdx + 1) * tileM <= blockM)
+            {
                 transposeM1 = tileM;
-            } else if (blockIdx * tileM <= blockM) {
+            }
+            else if (blockIdx * tileM <= blockM)
+            {
                 transposeM1 = blockM % tileM;
             }
-            if ((blockIdx + 9) * tileM <= blockM) {
+            if ((blockIdx + 9) * tileM <= blockM)
+            {
                 transposeM2 = tileM;
-            } else if ((blockIdx + 8) * tileM <= blockM) {
+            }
+            else if ((blockIdx + 8) * tileM <= blockM)
+            {
                 transposeM2 = blockM % tileM;
             }
 
             int srcOffset = (offsetM + blockIdx * tileM) * N + offsetN;
-            int dstOffset = (totolBlocks - 1 - blockIdx) * tileM;
+            int dstOffset = (totalBlocks - 1 - blockIdx) * tileM;
 
-            if (transposeM1) {
+            if (transposeM1)
+            {
                 optranspose.Process1(srcOffset, dstOffset, transposeM1);
-                if (transposeM2) {
+                if (transposeM2)
+                {
                     optranspose.Process1(srcOffset + 8 * tileM * N, dstOffset - 8 * tileM, transposeM2);
                 }
             }
@@ -114,33 +134,42 @@ public:
             CrossCoreSetFlag<0x0, PIPE_MTE3>(0x6);
             CrossCoreWaitFlag(0x6);
 
-            if (transposeM1) {
+            if (transposeM1)
+            {
                 optranspose.Process2(srcOffset, dstOffset, transposeM1);
-                if (transposeM2) {
+                if (transposeM2)
+                {
                     optranspose.Process2(srcOffset + 8 * tileM * N, dstOffset - 8 * tileM, transposeM2);
                 }
             }
-        } else {
-            if (blockIdx) {
+        }
+        else
+        {
+            if (blockIdx)
+            {
                 return;
             }
 
             int srcOffset = offsetM * N + offsetN;
             int dstOffset = 0;
-            if (blockM == 512 || !offsetM) {
+            if (blockM == 512 || !offsetM)
+            {
                 pipe->Reset();
                 pipe->InitBuffer(inQueueSrc1, 1, 8192 * sizeof(T));
                 pipe->InitBuffer(inQueueSrc2, 1, 8192 * sizeof(T));
                 pipe->InitBuffer(outQueueDst, 1, 8192 * sizeof(T));
-                optranspose.Init(pipe, inQueueSrc1, inQueueSrc2, outQueueDst, aGlobalReal, aGlobalImag, workGlobalReal, workGlobalImag, gather1, gather2, workM, N, tileM, blockN);
-                opLU1.Init(pipe, inQueueSrc1, inQueueSrc2, workGlobalReal, workGlobalImag, wGlobal, workM, blockN, blockN);
+                optranspose.Init(pipe, inQueueSrc1, inQueueSrc2, outQueueDst, aGlobalReal, aGlobalImag, workGlobalReal,
+                                 workGlobalImag, gather1, gather2, workM, N, tileM, blockN);
+                opLU1.Init(pipe, inQueueSrc1, inQueueSrc2, workGlobalReal, workGlobalImag, wGlobal, workM, blockN,
+                           blockN);
             }
             optranspose.Process1(srcOffset, dstOffset, blockM);
 
-            int32_t eventIDMTE3ToMTE2 = static_cast<int32_t>(GetTPipePtr()->FetchEventID(AscendC::HardEvent::MTE3_MTE2));
+            int32_t eventIDMTE3ToMTE2 =
+                static_cast<int32_t>(GetTPipePtr()->FetchEventID(AscendC::HardEvent::MTE3_MTE2));
             AscendC::SetFlag<AscendC::HardEvent::MTE3_MTE2>(eventIDMTE3ToMTE2);
             AscendC::WaitFlag<AscendC::HardEvent::MTE3_MTE2>(eventIDMTE3ToMTE2);
-            
+
             opLU1.Process(tileM - blockM, offsetM, offsetN, blockM, blockM + orgM - M, realN);
 
             eventIDMTE3ToMTE2 = static_cast<int32_t>(GetTPipePtr()->FetchEventID(AscendC::HardEvent::MTE3_MTE2));
@@ -152,7 +181,9 @@ public:
     }
 };
 
-__aicore__ inline void custom_lu(TBufPool<TPosition::VECCALC, 16> &tbufPool, CMatmulCustom<float> &opmm, int orgM, int orgN, int blockM, int blockN, int tileM, GM_ADDR A_work, GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm, GM_ADDR eye_gm)
+__aicore__ inline void custom_lu(TBufPool<TPosition::VECCALC, 16> &tbufPool, CMatmulCustom<float> &opmm, int orgM,
+                                 int orgN, int blockM, int blockN, int tileM, GM_ADDR A_work, GM_ADDR W,
+                                 GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm, GM_ADDR eye_gm)
 {
     int M = (orgM + 15) / 16 * 16;
     int strideN = (orgN + 127) / 128 * 128;
@@ -186,10 +217,12 @@ __aicore__ inline void custom_lu(TBufPool<TPosition::VECCALC, 16> &tbufPool, CMa
 
 #ifdef __DAV_C220_VEC__
     GTRF2Solver<float> getf2solver;
-    getf2solver.Init(&tbufPool, aGlobalReal, aGlobalImag, workGlobal, wGlobal, gather1, gather2, M, orgM, strideN, blockN, workM, tileM);
+    getf2solver.Init(&tbufPool, aGlobalReal, aGlobalImag, workGlobal, wGlobal, gather1, gather2, M, orgM, strideN,
+                     blockN, workM, tileM);
     getf2solver.Process(0, 0, M, min(orgN, blockN));
 
-    if (blockIdx >= 8 && M > 512) {
+    if (blockIdx >= 8 && M > 512)
+    {
         CrossCoreWaitFlag(0x6);
         CrossCoreWaitFlag(0x6);
     }
@@ -198,23 +231,30 @@ __aicore__ inline void custom_lu(TBufPool<TPosition::VECCALC, 16> &tbufPool, CMa
     if (blockIdx == 8 || blockIdx == 10) opswap.Init(&tbufPool, aGlobalReal, aGlobalImag, eyeGlobal);
 
     NegateCustom<float> opng;
-    if (coreIdx >= 4) {
+    if (coreIdx >= 4)
+    {
         optrsm.Init(&tbufPool, blockM);
         if (blockIdx & 1) opng.Init(&tbufPool);
     }
-    for (int i = 1, offset = blockN; i < cnt; ++i, offset += blockN) {
+    for (int i = 1, offset = blockN; i < cnt; ++i, offset += blockN)
+    {
         CrossCoreSetFlag<0x0, PIPE_MTE3>(0x2);
         CrossCoreWaitFlag(0x2);
-        DataCacheCleanAndInvalid<uint32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(wGlobal[offset - blockN]);
-        if (blockIdx == 8) {
-            for (int j = offset - blockN; j < offset; ++j) {
+        DataCacheCleanAndInvalid<uint32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
+            wGlobal[offset - blockN]);
+        if (blockIdx == 8)
+        {
+            for (int j = offset - blockN; j < offset; ++j)
+            {
                 int p = wGlobal.GetValue(j);
                 opswap.Process(offset + j * strideN, offset + p * strideN, N - offset);
                 opswap.Process(j * strideN, p * strideN, offset - blockN);
             }
         }
-        if (blockIdx == 10) {
-            for (int j = offset - blockN; j < offset; ++j) {
+        if (blockIdx == 10)
+        {
+            for (int j = offset - blockN; j < offset; ++j)
+            {
                 int p = wGlobal.GetValue(j);
                 opswap.ProcessEye(j * strideN, p * strideN, N);
             }
@@ -227,17 +267,25 @@ __aicore__ inline void custom_lu(TBufPool<TPosition::VECCALC, 16> &tbufPool, CMa
         int trsmBlockN = ((trsmTotalN + trsmBlocks - 1) / trsmBlocks + 15) / 16 * 16;
         int trsmOffsetN = trsmBlockN * (coreIdx - 4);
         int realBlockN = min(trsmTotalN - trsmOffsetN, trsmBlockN);
-        if (coreIdx >= 4 && trsmOffsetN < trsmTotalN) {
-            solveTrsm<float>(optrsm, opmm, trsmM, realBlockN, strideN, blockM, aGlobalReal[trsmOffsetN + offset + (offset - trsmM) * strideN], aGlobalImag[trsmOffsetN + offset + (offset - trsmM) * strideN], aGlobalImagNeg[trsmOffsetN + offset + (offset - trsmM) * strideN], aGlobalReal[offset - trsmM + (offset - trsmM) * strideN], aGlobalImag[offset - trsmM + (offset - trsmM) * strideN]);
+        if (coreIdx >= 4 && trsmOffsetN < trsmTotalN)
+        {
+            solveTrsm<float>(optrsm, opmm, trsmM, realBlockN, strideN, blockM,
+                             aGlobalReal[trsmOffsetN + offset + (offset - trsmM) * strideN],
+                             aGlobalImag[trsmOffsetN + offset + (offset - trsmM) * strideN],
+                             aGlobalImagNeg[trsmOffsetN + offset + (offset - trsmM) * strideN],
+                             aGlobalReal[offset - trsmM + (offset - trsmM) * strideN],
+                             aGlobalImag[offset - trsmM + (offset - trsmM) * strideN]);
             CrossCoreSetFlag<0x2, PIPE_MTE3>(0x3);
         }
         CrossCoreWaitFlag(0x5);
         getf2solver.Process(offset, offset, M - offset, min(orgN - offset, blockN));
-        if ((coreIdx >= 4) && (blockIdx & 1) && (trsmOffsetN < trsmTotalN)) {
+        if ((coreIdx >= 4) && (blockIdx & 1) && (trsmOffsetN < trsmTotalN))
+        {
             opng.SetMatrix(aGlobalReal[trsmOffsetN + offset + (offset - trsmM) * strideN], strideN);
             opng.Process(trsmM, realBlockN);
         }
-        if (blockIdx >= 8 && M - offset > 512) {
+        if (blockIdx >= 8 && M - offset > 512)
+        {
             CrossCoreWaitFlag(0x6);
             CrossCoreWaitFlag(0x6);
         }
@@ -245,15 +293,19 @@ __aicore__ inline void custom_lu(TBufPool<TPosition::VECCALC, 16> &tbufPool, CMa
     CrossCoreSetFlag<0x0, PIPE_MTE3>(0x2);
     CrossCoreWaitFlag(0x2);
     DataCacheCleanAndInvalid<uint32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(wGlobal[t - blockN]);
-    if (blockIdx == 8) {
-        for (int j = t - blockN; j < min(orgM, orgN); ++j) {
+    if (blockIdx == 8)
+    {
+        for (int j = t - blockN; j < min(orgM, orgN); ++j)
+        {
             int p = wGlobal.GetValue(j);
             opswap.Process(t + j * strideN, t + p * strideN, N - t);
             opswap.Process(j * strideN, p * strideN, t - blockN);
         }
     }
-    if (blockIdx == 10) {
-        for (int j = t - blockN; j < min(orgM, orgN); ++j) {
+    if (blockIdx == 10)
+    {
+        for (int j = t - blockN; j < min(orgM, orgN); ++j)
+        {
             int p = wGlobal.GetValue(j);
             opswap.ProcessEye(j * strideN, p * strideN, N);
         }
@@ -263,20 +315,29 @@ __aicore__ inline void custom_lu(TBufPool<TPosition::VECCALC, 16> &tbufPool, CMa
     CrossCoreWaitFlag(0x2);
     tbufPool.Reset();
 
-#elif  __DAV_C220_CUBE__
+#elif __DAV_C220_CUBE__
     SetAtomicAdd<float>();
-    for (int i = 1, offset = blockN; i < cnt; ++i, offset += blockN) {
+    for (int i = 1, offset = blockN; i < cnt; ++i, offset += blockN)
+    {
         int trsmTotalN = min((i & -i) * blockN, t - offset);
         int trsmM = (i & -i) * blockN;
         int trsmBlocks = min(blockNum - 4, (trsmTotalN + 15) / 16);
         int trsmBlockN = ((trsmTotalN + trsmBlocks - 1) / trsmBlocks + 15) / 16 * 16;
         int trsmOffsetN = trsmBlockN * (blockIdx - 4);
-        if (blockIdx >= 4 && trsmOffsetN < trsmTotalN) {
+        if (blockIdx >= 4 && trsmOffsetN < trsmTotalN)
+        {
             int realBlockN = min(trsmTotalN - trsmOffsetN, trsmBlockN);
-            solveTrsm<float>(optrsm, opmm, trsmM, realBlockN, strideN, blockM, aGlobalReal[trsmOffsetN + offset + (offset - trsmM) * strideN], aGlobalImag[trsmOffsetN + offset + (offset - trsmM) * strideN], aGlobalImagNeg[trsmOffsetN + offset + (offset - trsmM) * strideN], aGlobalReal[offset - trsmM + (offset - trsmM) * strideN], aGlobalImag[offset - trsmM + (offset - trsmM) * strideN]);
+            solveTrsm<float>(optrsm, opmm, trsmM, realBlockN, strideN, blockM,
+                             aGlobalReal[trsmOffsetN + offset + (offset - trsmM) * strideN],
+                             aGlobalImag[trsmOffsetN + offset + (offset - trsmM) * strideN],
+                             aGlobalImagNeg[trsmOffsetN + offset + (offset - trsmM) * strideN],
+                             aGlobalReal[offset - trsmM + (offset - trsmM) * strideN],
+                             aGlobalImag[offset - trsmM + (offset - trsmM) * strideN]);
             CrossCoreWaitFlag(0x3);
-            opmm.SetMatrix(aGlobalReal, aGlobalImag, aGlobalReal, aGlobalImagNeg, aGlobalImag, aGlobalReal, aGlobalImag, strideN, strideN);
-            opmm.Process(offset - trsmM + offset * strideN, trsmOffsetN + offset + (offset - trsmM) * strideN, trsmOffsetN + offset + offset * strideN, M - offset, realBlockN, trsmM);
+            opmm.SetMatrix(aGlobalReal, aGlobalImag, aGlobalReal, aGlobalImagNeg, aGlobalImag, aGlobalReal, aGlobalImag,
+                           strideN, strideN);
+            opmm.Process(offset - trsmM + offset * strideN, trsmOffsetN + offset + (offset - trsmM) * strideN,
+                         trsmOffsetN + offset + offset * strideN, M - offset, realBlockN, trsmM);
         }
         CrossCoreSetFlag<0x0, PIPE_FIX>(0x4);
         CrossCoreWaitFlag(0x4);

@@ -12,6 +12,8 @@
 |  <term>Ascend 950PR/Ascend 950DT</term>   |     ×    |
 
 
+注：表中"Atlas 训练系列产品"指非A2代际的历史训练产品；Atlas A2训练/推理系列产品（含910B等）单独标注支持情况。
+
 ## 功能说明
 
 - 接口功能\
@@ -57,12 +59,12 @@
     ```
     aclError aclsolverCgetriBatched(
         aclsolverHandle_t handle,
-        const int64_t n, 
-        std::complex<float> *A, 
-        const int64_t lda, 
-        std::complex<float> *Ainv, 
-        const int64_t lda_inv, 
-        int32_t *info, 
+        const int64_t n,
+        std::complex<float> *A,
+        const int64_t lda,
+        std::complex<float> *Ainv,
+        const int64_t lda_inv,
+        int32_t *info,
         int64_t batchSize);
     ```
 - 参数说明：
@@ -114,12 +116,14 @@
     </tr>
     </table>
 
-- 算子约束： 
+- 算子约束：
   - lda、lda_inv、info参数在当前版本实际未启用。
+  - lda与lda_inv当前必须等于n（矩阵按连续布局处理，batch内每个矩阵均为n*n连续存储），传入其它值将直接返回参数错误。
+  - info参数当前版本不会写入任何返回值，传入可丢弃的变量即可。
   - 入参n大于等于32且小于等于256。
   - 入参batchSize小于等于3000。
 
-- 调用实现  
+- 调用实现
     使用内核调用符<<<>>>调用核函数。
 
 ## 调用示例

@@ -68,3 +68,23 @@ tbetoolkits-*.log
 single/
 scripts/ci/tmp/
 pr_filelist.txt
+# python cache
+__pycache__/
+*.pyc
+
+# coverage and intermediate artifacts
+*.gcda
+*.gcno
+*.o
+
+# local tool caches
+.ruff_cache/
+.idea/
+
+oat_reports/
+
+oat_reports/
+
+log/
+
+log/

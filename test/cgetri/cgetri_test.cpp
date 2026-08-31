@@ -1,34 +1,36 @@
 /**
-* Copyright (c) 2026 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file cgetri_test.cpp
  * \brief
  */
 
+#include <algorithm>
+#include <cmath>
+#include <complex>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
-#include <vector>
-#include <complex>
-#include <algorithm>
 #include <iterator>
-#include <cmath>
+#include <vector>
+
+#include "../utils/test_utils.h"
 #include "acl/acl.h"
 #include "cann_ops_solver.h"
-#include "../utils/test_utils.h"
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     int deviceId, M, N;
-    deviceId = (argc>1) ? std::atoi(argv[1]) : 0;
-    N = (argc>2) ? std::atoi(argv[2]) : 32;
+    deviceId = (argc > 1) ? std::atoi(argv[1]) : 0;
+    N = (argc > 2) ? std::atoi(argv[2]) : 32;
     M = N;
 
     CHECK_ACL(aclInit(nullptr));
@@ -43,13 +45,16 @@ int main(int argc, char **argv) {
     int t = (std::min(M, N) + 15) / 16 * 16;
     size_t aMatrixFileSize = M * N * sizeof(float) * 2;
 
-    std::complex<float>* A = nullptr;
-    auto cleanup = [&]() -> aclError {
-        if (A != nullptr) {
+    std::complex<float> *A = nullptr;
+    auto cleanup = [&]() -> aclError
+    {
+        if (A != nullptr)
+        {
             CHECK_ACL(aclrtFreeHost(A));
         }
         CHECK_ACL(aclrtDestroyStream(stream));
-        if (handle != nullptr) {
+        if (handle != nullptr)
+        {
             CHECK_ACL(aclsolverDestroy(handle));
         }
         CHECK_ACL(aclrtResetDevice(deviceId));
@@ -57,8 +62,10 @@ int main(int argc, char **argv) {
         return ACL_SUCCESS;
     };
 
-    CHECK_ACL(aclrtMallocHost((void**)(&A), aMatrixFileSize));
-    ReadFile("./test/cgetri/data/input/A_gm.bin", aMatrixFileSize, A, aMatrixFileSize);
+    CHECK_ACL(aclrtMallocHost((void **)(&A), aMatrixFileSize));
+    CHECK_RET(ReadFile("./test/cgetri/data/input/A_gm.bin", aMatrixFileSize, A, aMatrixFileSize),
+              LOG_PRINT("ReadFile A_gm.bin failed.\n");
+              cleanup(); return ACL_ERROR_INVALID_PARAM);
 
     std::cout << "[Input] A:" << std::endl;
     PrintPartOfMatrix<float>((uint8_t *)A, M, N, 8, 8);

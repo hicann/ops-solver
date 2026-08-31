@@ -1,0 +1,8 @@
+# typos 拼写检查豁免配置: CANN/cann 为华为计算架构与组织名, Jetbrain 为 IDE 注释, 均非拼写错误
+[default.extend-words]
+CANN = "CANN"
+cann = "cann"
+Jetbrain = "Jetbrain"
+ASCEND = "ASCEND"
+ascend = "ascend"
+ND = "ND"
