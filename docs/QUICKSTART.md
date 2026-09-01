@@ -2,7 +2,7 @@
 
 ## 使用须知
 
-本指南旨在帮助您快速上手CANN和`ops-solver`算子仓的使用。为方便快速了解算子开发全流程，将以**cmatinv_batched**算子为实践对象，算子源码按芯片架构区分目录（A2/A3 平台对应 `arch22/`，Ascend 950 PR/DT 对应 `arch35/`），以下以 Ascend 950 硬件平台为例。
+本指南旨在帮助您快速上手CANN和`ops-solver`算子仓的使用。为方便快速了解算子开发全流程，将以**cmatinv_batched**算子为实践对象，算子源码统一存放于 `src/<算子名>/` 目录（如 `src/cmatinv_batched/`，包含 host 与 kernel 源文件），以下以 Ascend 950 硬件平台为例。
 
 1. **[环境准备](#环境准备)**：完成软件包安装和源码下载，此处不再赘述。快速入门场景下，**推荐WebIDE或Docker环境**，安装操作简单。
 
@@ -38,15 +38,17 @@ bash build.sh --pkg --soc=ascend950 --ops=cmatinv_batched
 
 若提示如下信息，说明编译成功。
 ```bash
-Self-extractable archive "cann-ops-solver_${cann_version}_linux-${arch}.run" successfully created.
+Self-extractable archive "cann-950-ops-solver_9.0.0_linux-x86_64.run" successfully created.
 ```
 编译成功后，run包存放于项目根目录的build_out目录下。
+
+> **说明**：run包实际命名规则为 `cann-<SOC短名>-ops-solver_<版本>_linux-<架构>.run`，SOC短名由编译时指定的 `--soc` 决定（如 ascend950 对应 `950`、ascend910b 对应 `910b`），架构为当前系统 `uname -m` 输出。
 
 ### 2. 安装cmatinv_batched算子包
 
 > **说明**：run包必须通过`--install`参数执行安装，不带参数仅显示帮助信息不会安装。可通过`--install-path=<路径>`指定安装目录，默认安装路径：root用户为`/usr/local/Ascend`，普通用户为`~/Ascend`。
 ```bash
-./build_out/cann-ops-solver_${version}_linux-${arch}.run --install --quiet
+./build_out/cann-950-ops-solver_9.0.0_linux-x86_64.run --install --quiet
 ```
 
 ### 3. 快速验证：运行算子样例
