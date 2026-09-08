@@ -191,10 +191,10 @@ public:
         this->aGlobalReal = aGlobalReal;
         this->aGlobalImag = aGlobalImag;
         this->N = N;
-        this->alignedN = ceil(N, elementsPerBlock);
+        this->alignedN = (N + elementsPerBlock - 1) / elementsPerBlock * elementsPerBlock;
         this->srcN = srcN;
         this->dstN = dstN;
-        linesPerIter = max(1, TILE_LENGTH / ceil(dstN, 16) / 2);
+        linesPerIter = max(1, TILE_LENGTH / ((dstN + 15) / 16 * 16) / 2);
     }
     __aicore__ inline void MergeRealImagWork(int M, int p, int id)
     {

@@ -78,6 +78,18 @@ extern "C"
 }
 #endif
 
+/*! \brief Eigenvector computation mode for Hermitian eigensolver APIs. */
+typedef enum {
+    ACLSOLVER_EIG_MODE_NOVECTOR = 0,
+    ACLSOLVER_EIG_MODE_VECTOR = 1
+} aclsolverEigMode_t;
+
+/*! \brief Matrix triangle selection mode for Hermitian matrix inputs. */
+typedef enum {
+    ACLSOLVER_FILL_MODE_LOWER = 0,
+    ACLSOLVER_FILL_MODE_UPPER = 1
+} aclsolverFillMode_t;
+
 /**
  * @brief Batched complex matrix inversion for small matrices (n < 32)
  *
@@ -169,3 +181,25 @@ aclError aclsolverCgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
  */
 aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_t n, float *A, const int64_t lda,
                          int32_t *ipiv, int32_t *info);
+
+/**
+ * @brief Compute eigenvalues and optionally eigenvectors of a complex Hermitian matrix.
+ *
+ * A uses column-major storage. W returns eigenvalues in ascending order. When jobz is
+ * ACLSOLVER_EIG_MODE_VECTOR, A is overwritten by column-major eigenvectors.
+ *
+ * @param handle Solver handle created by aclsolverCreate.
+ * @param jobz Selects eigenvalues only or eigenvalues and eigenvectors.
+ * @param uplo Selects the lower or upper triangle of A as input.
+ * @param n Non-negative order of the matrix. The practical size is constrained by
+ *          available host and device memory.
+ * @param A Input Hermitian matrix in column-major storage. In vector mode, overwritten
+ *          with the eigenvectors stored by column.
+ * @param lda Leading dimension of A; must be at least max(1, n).
+ * @param W Output array of n real eigenvalues in ascending order.
+ * @param info Output status: 0 on success, negative for an invalid argument, and
+ *             positive for a numerical failure.
+ * @return ACL_SUCCESS on a completed call, otherwise an ACL error code.
+ */
+aclError aclsolverCheevj(aclsolverHandle_t handle, aclsolverEigMode_t jobz, aclsolverFillMode_t uplo, const int64_t n,
+                         std::complex<float> *A, const int64_t lda, float *W, int32_t *info);

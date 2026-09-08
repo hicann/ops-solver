@@ -68,6 +68,14 @@
     <td>AI Core</td>
     <td>批量复数矩阵求逆，适用于矩阵维度较大（n>32）的场景，对一批复数矩阵同时进行求逆运算。</td>
   </tr>
+  <tr>
+    <td>solver</td>
+    <td><a href="./zh/cheevj.md">cheevj</a></td>
+    <td>✓</td>
+    <td>✓</td>
+    <td>AI Core</td>
+    <td>单精度复数Hermitian矩阵特征值分解，可选计算特征向量。</td>
+  </tr>
 </tbody></table>
 
 ## 算子接口
@@ -93,3 +101,4 @@ ops-solver提供类似cuSolver风格的C API接口，通过handle管理上下文
 | `aclsolverSgetri` | 单精度矩阵求逆 |
 | `aclsolverCmatinvBatched` | 批量复数矩阵求逆（小矩阵，n≤32） |
 | `aclsolverCgetriBatched` | 批量复数矩阵求逆（大矩阵，n>32） |
+| `aclsolverCheevj` | 单精度复数Hermitian矩阵特征值分解 |
