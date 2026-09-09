@@ -16,14 +16,17 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cassert>
+#include <cmath>
+#include <complex>
+#include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <string>
 #include <vector>
-
 #include "acl/acl.h"
 #include "cann_ops_solver_common.h"
 
