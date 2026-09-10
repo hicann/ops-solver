@@ -11,7 +11,6 @@
 
 set -e
 
-BUILD_DIR=build
 BUILD_OPS=""
 RUN_TEST=OFF
 ENABLE_PACKAGE=FALSE
@@ -23,6 +22,8 @@ export BASE_PATH=$(
 export BUILD_PATH="${BASE_PATH}/build"
 export BUILD_OUT_PATH="${BASE_PATH}/build_out"
 CANN_3RD_LIB_PATH="${BUILD_PATH}/third_party"
+# 构建目录使用基于仓库根的绝对路径，避免误删/误建调用方当前目录下的同名 build 目录
+BUILD_DIR="${BUILD_PATH}"
 
 ARCH_INFO=$(uname -m)
 
@@ -58,6 +59,12 @@ export ASCEND_HOME_PATH="${ASCEND_HOME_PATH:-${ASCEND_HOME}}"
 # test 使用变量
 export LINUX_INCLUDE_PATH="${ASCEND_HOME_PATH}/${ARCH_INFO}-linux/include"
 export EAGER_LIBRARY_PATH="${ASCEND_HOME_PATH}/lib64"
+
+# 校验脚本位于有效的仓库根目录（存在 CMakeLists.txt），后续构建/清理仅作用于该仓库
+if [ ! -f "${BASE_PATH}/CMakeLists.txt" ]; then
+    print_error "CMakeLists.txt not found under ${BASE_PATH}; build.sh must be invoked from a valid ops-solver repository."
+    exit 1
+fi
 
 # ==========================
 # 解析参数
@@ -121,8 +128,17 @@ echo "BUILD_OPS=${BUILD_OPS}, RUN_TEST=${RUN_TEST}, ENABLE_PACKAGE=${ENABLE_PACK
 # ==========================
 # 构建
 # ==========================
-rm -rf ${BUILD_DIR}
-mkdir -p ${BUILD_DIR}
+# 切换到仓库根目录：无论调用方 cwd 在哪里，后续构建/测试/数据清理均在仓库内执行
+# （test 的数据生成/校验脚本与测试二进制均按 ./test/... 相对路径读写）
+cd "${BASE_PATH}"
+
+# 防御性校验：待清理的构建目录必须位于仓库内，避免误删仓库外同名目录
+if [[ "${BUILD_DIR}" != "${BASE_PATH}"/* ]]; then
+    print_error "Refuse to remove build directory outside the repository: ${BUILD_DIR}"
+    exit 1
+fi
+rm -rf "${BUILD_DIR}"
+mkdir -p "${BUILD_DIR}"
 
 # 默认 SOC_VERSION，ASCEND_CANN_PACKAGE_PATH 使用环境变量
 if [ -z "${SOC_VERSION}" ]; then
@@ -168,7 +184,7 @@ if [ "${ENABLE_PACKAGE}" == "TRUE" ]; then
     CMAKE_OPTIONS="${CMAKE_OPTIONS} -DENABLE_PACKAGE=ON -DCANN_3RD_LIB_PATH=${CANN_3RD_LIB_PATH}"
 fi
 
-cmake -B ${BUILD_DIR} ${CMAKE_OPTIONS}
+cmake -S "${BASE_PATH}" -B "${BUILD_DIR}" ${CMAKE_OPTIONS}
 cmake --build ${BUILD_DIR} -j
 if [ "${ENABLE_PACKAGE}" == "TRUE" ]; then
     cmake --build ${BUILD_DIR} --target package
@@ -189,8 +205,8 @@ if [ "${RUN_TEST}" == "ON" ]; then
 
     for op in "${OP_ARRAY[@]}"; do
         TEST_BIN="${BUILD_DIR}/test/${op}/${op}_test"
-        GEN_SCRIPT="test/${op}/data/gen_data.py"
-        VERIFY_SCRIPT="test/${op}/data/verify_result.py"
+        GEN_SCRIPT="${BASE_PATH}/test/${op}/data/gen_data.py"
+        VERIFY_SCRIPT="${BASE_PATH}/test/${op}/data/verify_result.py"
 
         echo ""
         echo "========== Running ${op}_test =========="
@@ -222,7 +238,7 @@ if [ "${RUN_TEST}" == "ON" ]; then
         fi
 
         # 清理临时数据（可选）
-        rm -rf "test/${op}/data/input" "test/${op}/data/output" "test/${op}/data/golden"
+        rm -rf "${BASE_PATH}/test/${op}/data/input" "${BASE_PATH}/test/${op}/data/output" "${BASE_PATH}/test/${op}/data/golden"
 
         echo -e "Test for $op completed.\n"
         echo "-------------------------------------------"
