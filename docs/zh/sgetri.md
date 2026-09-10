@@ -125,7 +125,8 @@
         aclrtMallocHost((void**)(&A), aMatrixFileSize);
         // 填充A矩阵数据...
 
-        int32_t *info;
+        int32_t infoVal = 0;
+        int32_t *info = &infoVal;
 
         // 调用 aclsolverSgetri
         auto ret = aclsolverSgetri(handle, n, A, n, info);

@@ -17,7 +17,7 @@
 ## 功能说明
 
 - 接口功能\
-    aclsolverCgetriBatched：计算批量复数矩阵的逆矩阵，适用于矩阵维度较大的场景（n > 32）。
+    aclsolverCgetriBatched：计算批量复数矩阵的逆矩阵，适用于矩阵维度较大的场景（n ≥ 32）。
 
 - 计算公式
     $$
@@ -38,7 +38,7 @@
      2+0i, 3+0i, 4+0i, 3+0i
      1+0i, 2+0i, 3+0i, 4+0i]
     ```
-    输入"n"为： 4\
+    输入"n"为： 4（仅为数据格式示意，实际调用需满足 32 ≤ n ≤ 256）\
     输入"batchSize"为：2\
     调用"aclsolverCgetriBatched"算子后，\
     输出"Ainv"为：
@@ -127,7 +127,7 @@
     使用内核调用符<<<>>>调用核函数。
 
 ## 调用示例
-- 完整代码示例：测试文件待补充
+- 完整代码示例：[aclsolverCgetriBatched批量复数矩阵求逆示例](../../test/cgetri_batched/cgetri_batched_test.cpp)
 - 核心调用步骤：
 
     ```
@@ -152,7 +152,7 @@
 
         // 构造输入数据
         int64_t batchSize = 2;
-        int64_t n = 4;
+        int64_t n = 48;
         int64_t tensorASize = batchSize * n * n;
         std::vector<std::complex<float>> tensorInAData;
         std::vector<std::complex<float>> tensorInAinvData;
