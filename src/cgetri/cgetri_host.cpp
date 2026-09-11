@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "../utils/assert.h"
+#include "../utils/eye_matrix.h"
 #include "acl/acl.h"
 #include "cann_ops_solver.h"
 #include "tiling/platform/platform_ascendc.h"
@@ -32,8 +33,7 @@
 extern void cgetri_kernel_do(GM_ADDR sync, int orgM, int orgN, int blockM, int blockN, int tileM, GM_ADDR A_org,
                              GM_ADDR A_work, GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm,
                              GM_ADDR gather3_gm, GM_ADDR eye_gm, uint32_t numBlocks, void *stream);
-
-bool GenerateTiling(int blockM, int blockN, int N, int strideN, uint8_t *gatherBuf1, uint8_t *gatherBuf2,
+bool GenerateTiling(int blockM, int blockN, int64_t N, int64_t strideN, uint8_t *gatherBuf1, uint8_t *gatherBuf2,
                     uint8_t *gatherBuf3, uint8_t *eyeBuf)
 {
     try
@@ -54,7 +54,7 @@ bool GenerateTiling(int blockM, int blockN, int N, int strideN, uint8_t *gatherB
             auto buf = reinterpret_cast<uint32_t *>(gatherBuf3);
             int idx = 0;
             static constexpr int TILE_LENGTH = 4096;
-            int n = std::min(N, TILE_LENGTH);
+            int n = static_cast<int>(std::min(N, static_cast<int64_t>(TILE_LENGTH)));
             if (n <= 0)
             {
                 return true;
@@ -68,13 +68,9 @@ bool GenerateTiling(int blockM, int blockN, int N, int strideN, uint8_t *gatherB
                     buf[idx++] = (i * n + j + TILE_LENGTH) * sizeof(float);
                 }
         }
+        if (!GenerateEyeMatrix(N, strideN, eyeBuf, EYE_FLOATS_PER_COMPLEX_ELEMENT))
         {
-            auto buf = reinterpret_cast<float *>(eyeBuf);
-            memset(buf, 0, (N + 15) / 16 * 16 * strideN * sizeof(float) * 2);
-            for (int i = 0; i < N; ++i)
-            {
-                buf[i * (strideN + 1)] = 1;
-            }
+            return false;
         }
     }
     catch (const std::exception &e)
@@ -91,6 +87,8 @@ aclError aclsolverCgetri(aclsolverHandle_t handle, const int64_t n, std::complex
     SOLVER_ECHECK(n > 0 && lda > 0 && A != nullptr && info != nullptr,
                   "aclsolverCgetri invalid param: n, lda <= 0, or A, info is nullptr.", ACL_ERROR_INVALID_PARAM);
     SOLVER_ECHECK(n <= INT32_MAX, "aclsolverCgetri invalid param: n exceeds int32 range.", ACL_ERROR_INVALID_PARAM);
+    SOLVER_ECHECK(n * n <= INT32_MAX, "aclsolverCgetri invalid param: n * n exceeds INT32_MAX elements.",
+                  ACL_ERROR_INVALID_PARAM);
     SOLVER_ECHECK(
         lda == n,
         "aclsolverCgetri only supports lda == n in current version, matrix A must be stored contiguously as n * n.",
@@ -112,6 +110,11 @@ aclError aclsolverCgetri(aclsolverHandle_t handle, const int64_t n, std::complex
     {
         numBlocks = 20;
     }
+    // 平台信息查询失败时 GetCoreNumAic 可能返回 0，按 1 处理，避免以 0 block 启动内核
+    if (numBlocks == 0)
+    {
+        numBlocks = 1;
+    }
 
     int M, N, blockDim, blockN, blockM, tileM;
     M = n;
@@ -121,9 +124,12 @@ aclError aclsolverCgetri(aclsolverHandle_t handle, const int64_t n, std::complex
     blockN = 16;
     blockM = 16;
     tileM = 512;
-    int t = (std::min(M, N) + blockN - 1) / blockN * blockN;
+    // 尺寸推导统一在 int64_t 域计算，避免 N 较大时 int 乘加溢出导致缓冲尺寸回绕
+    int64_t t = (static_cast<int64_t>(std::min(M, N)) + blockN - 1) / blockN * blockN;
+    int64_t alignedM = (static_cast<int64_t>(M) + 15) / 16 * 16;
+    int64_t strideN = (static_cast<int64_t>(N) + 127) / 128 * 128;
 
-    size_t aMatrixFileSize = M * N * sizeof(float) * 2;
+    size_t aMatrixFileSize = static_cast<int64_t>(M) * N * sizeof(float) * 2;
     size_t wFileSize = t * sizeof(int);
 
     uint8_t *aMatrixHost = reinterpret_cast<uint8_t *>(A);
@@ -159,15 +165,15 @@ aclError aclsolverCgetri(aclsolverHandle_t handle, const int64_t n, std::complex
     CHECK_ACLRT(aclrtMemcpy(aMatrixDevice, aMatrixFileSize, aMatrixHost, aMatrixFileSize, ACL_MEMCPY_HOST_TO_DEVICE),
                 cleanup());
 
-    size_t aMatrixWorkSize = ((N + 127) / 128 * 128) * ((M + 15) / 16 * 16 + 128) * sizeof(float) * 3;
+    size_t aMatrixWorkSize = static_cast<size_t>(strideN) * static_cast<size_t>(alignedM + 128) * sizeof(float) * 3;
     CHECK_ACLRT(aclrtMalloc((void **)&aMatrixDeviceWork, aMatrixWorkSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
 
     CHECK_ACLRT(aclrtMallocHost((void **)(&wHost), wFileSize), cleanup());
     CHECK_ACLRT(aclrtMalloc((void **)&wDevice, wFileSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
-    aclrtMemset(wDevice, wFileSize, -1, wFileSize);
+    CHECK_ACLRT(aclrtMemset(wDevice, wFileSize, -1, wFileSize), cleanup());
 
-    int workM = (M + tileM - 1) / tileM * tileM;
-    size_t workSize = workM * blockN * sizeof(float) * 2;
+    int64_t workM = (static_cast<int64_t>(M) + tileM - 1) / tileM * tileM;
+    size_t workSize = static_cast<size_t>(workM) * blockN * sizeof(float) * 2;
     CHECK_ACLRT(aclrtMalloc((void **)&workDevice, workSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
 
     CHECK_ACLRT(aclrtMallocHost((void **)(&eyeMatrixHost), aMatrixWorkSize), cleanup());
@@ -180,7 +186,7 @@ aclError aclsolverCgetri(aclsolverHandle_t handle, const int64_t n, std::complex
     CHECK_ACLRT(aclrtMalloc((void **)&gatherDevice1, gatherSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
     CHECK_ACLRT(aclrtMalloc((void **)&gatherDevice2, gatherSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
     CHECK_ACLRT(aclrtMalloc((void **)&gatherDevice3, gatherSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
-    if (!GenerateTiling(tileM, blockN, N, (N + 127) / 128 * 128, gatherHost1, gatherHost2, gatherHost3, eyeMatrixHost))
+    if (!GenerateTiling(tileM, blockN, N, strideN, gatherHost1, gatherHost2, gatherHost3, eyeMatrixHost))
     {
         cleanup();
         return ACL_ERROR_INTERNAL_ERROR;

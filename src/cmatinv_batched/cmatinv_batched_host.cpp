@@ -56,6 +56,23 @@ struct CmatinvBatchedTilingData
     uint32_t calNum[40];
 };
 
+// 获取归一化后的 AIV 核心数：平台信息查询失败返回 0 时按 1 处理（避免以 0 block 启动内核），
+// 并按 maxCnt 截断，与 cheevj 的 GetCheevjBlockCount 防护口径一致
+uint32_t GetNormalizedAivBlockCount(uint32_t maxCnt)
+{
+    auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
+    uint32_t numBlocks = 0;
+    if (ascendcPlatform != nullptr)
+    {
+        numBlocks = ascendcPlatform->GetCoreNumAiv();
+    }
+    if (numBlocks == 0)
+    {
+        numBlocks = 1;
+    }
+    return numBlocks > maxCnt ? maxCnt : numBlocks;
+}
+
 CmatinvBatchedTilingData CalTilingData(uint32_t vecCoreNum, uint32_t dtype, uint32_t n, uint32_t batchSize)
 {
     CmatinvBatchedTilingData tilingData;
@@ -118,16 +135,7 @@ aclError aclsolverCmatinvBatched(aclsolverHandle_t handle, const int64_t n, std:
         aclsolverGetStream(handle, &stream);
     }
 
-    auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
-    uint32_t numBlocks = 0;
-    if (ascendcPlatform != nullptr)
-    {
-        numBlocks = ascendcPlatform->GetCoreNumAiv();
-    }
-    if (numBlocks > 40)
-    {
-        numBlocks = 40;
-    }
+    uint32_t numBlocks = GetNormalizedAivBlockCount(MAX_CORE_CNT);
 
     SOLVER_ECHECK(
         n > 0 && batchSize > 0 && lda > 0 && lda_inv > 0 && A != nullptr && Ainv != nullptr && info != nullptr,
@@ -143,7 +151,7 @@ aclError aclsolverCmatinvBatched(aclsolverHandle_t handle, const int64_t n, std:
     // 参数校验完成后, n >= 32 的场景按 CgetriBatched 语义执行(适用其约束)
     if (n >= MATRIX_SHAPE_LIMIT)
     {
-        LOG_PRINT("CmatinvBatched only supports n < 32. For n >= 32, use CgetriBatched instead.\n");
+        LOG_PRINT("CmatinvBatched forwards to CgetriBatched for n >= 32.\n");
         return aclsolverCgetriBatched(handle, n, A, lda, Ainv, lda_inv, info, batchSize);
     }
 

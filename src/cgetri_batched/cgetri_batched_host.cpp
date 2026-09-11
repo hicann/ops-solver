@@ -79,6 +79,11 @@ aclError aclsolverCgetriBatched(aclsolverHandle_t handle, const int64_t n, std::
     {
         numBlocks = 20;
     }
+    // 平台信息查询失败时 GetCoreNumAic 可能返回 0，按 1 处理，避免以 0 block 启动内核
+    if (numBlocks == 0)
+    {
+        numBlocks = 1;
+    }
 
     SOLVER_ECHECK(
         n > 0 && batchSize > 0 && lda > 0 && lda_inv > 0 && A != nullptr && Ainv != nullptr && info != nullptr,

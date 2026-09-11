@@ -32,7 +32,7 @@ extern void sgetrf_kernel_do(GM_ADDR sync, int orgM, int orgN, int blockN, int t
                              GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm, uint32_t numBlocks,
                              void *stream);
 
-bool GenerateGather(int blockM, int blockN, int M, int N, uint8_t *gatherBuf1, uint8_t *gatherBuf2)
+bool GenerateGather(int blockM, int blockN, int64_t M, int64_t N, uint8_t *gatherBuf1, uint8_t *gatherBuf2)
 {
     try
     {
@@ -65,6 +65,8 @@ aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
                   ACL_ERROR_INVALID_PARAM);
     SOLVER_ECHECK(m <= INT32_MAX && n <= INT32_MAX, "aclsolverSgetrf invalid param: m or n exceeds int32 range.",
                   ACL_ERROR_INVALID_PARAM);
+    SOLVER_ECHECK(m * n <= INT32_MAX, "aclsolverSgetrf invalid param: m * n exceeds INT32_MAX elements.",
+                  ACL_ERROR_INVALID_PARAM);
     SOLVER_ECHECK(
         lda == n,
         "aclsolverSgetrf only supports lda == n in current version, matrix A must be stored contiguously as m * n.",
@@ -86,9 +88,13 @@ aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
     blockN = 16;
     blockM = 16;
     tileM = 512;
-    int t = (std::min(M, N) + blockN - 1) / blockN * blockN;
+    // 尺寸推导统一在 int64_t 域计算，避免 M/N 较大时 int 乘加溢出导致缓冲尺寸回绕
+    int64_t t = (static_cast<int64_t>(std::min(M, N)) + blockN - 1) / blockN * blockN;
+    int64_t alignedM = (static_cast<int64_t>(M) + 15) / 16 * 16;
+    int64_t alignedN = (static_cast<int64_t>(N) + 15) / 16 * 16;
+    int64_t strideN = (static_cast<int64_t>(N) + 127) / 128 * 128;
 
-    size_t aMatrixFileSize = M * N * sizeof(float);
+    size_t aMatrixFileSize = static_cast<int64_t>(M) * N * sizeof(float);
     size_t wFileSize = t * sizeof(int);
 
     uint8_t *aMatrixHost = reinterpret_cast<uint8_t *>(A);
@@ -118,15 +124,15 @@ aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
     CHECK_ACLRT(aclrtMemcpy(aMatrixDevice, aMatrixFileSize, aMatrixHost, aMatrixFileSize, ACL_MEMCPY_HOST_TO_DEVICE),
                 cleanup());
 
-    size_t aMatrixWorkSize = ((N + 127) / 128 * 128) * ((M + 15) / 16 * 16) * sizeof(float);
+    size_t aMatrixWorkSize = static_cast<size_t>(strideN) * static_cast<size_t>(alignedM) * sizeof(float);
     CHECK_ACLRT(aclrtMalloc((void **)&aMatrixDeviceWork, aMatrixWorkSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
 
     CHECK_ACLRT(aclrtMallocHost((void **)(&wHost), wFileSize), cleanup());
     CHECK_ACLRT(aclrtMalloc((void **)&wDevice, wFileSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
-    aclrtMemset(wDevice, wFileSize, -1, wFileSize);
+    CHECK_ACLRT(aclrtMemset(wDevice, wFileSize, -1, wFileSize), cleanup());
 
-    int workM = (M + tileM - 1) / tileM * tileM;
-    size_t workSize = workM * blockN * sizeof(float);
+    int64_t workM = (static_cast<int64_t>(M) + tileM - 1) / tileM * tileM;
+    size_t workSize = static_cast<size_t>(workM) * blockN * sizeof(float);
     CHECK_ACLRT(aclrtMalloc((void **)&workDevice, workSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
 
     size_t gatherSize = tileM * blockN * sizeof(float);
@@ -135,7 +141,7 @@ aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
     CHECK_ACLRT(aclrtMalloc((void **)&gatherDevice1, gatherSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
     CHECK_ACLRT(aclrtMalloc((void **)&gatherDevice2, gatherSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
 
-    if (!GenerateGather(tileM, blockN, (M + 15) / 16 * 16, (N + 15) / 16 * 16, gatherHost1, gatherHost2))
+    if (!GenerateGather(tileM, blockN, alignedM, alignedN, gatherHost1, gatherHost2))
     {
         cleanup();
         return ACL_ERROR_INTERNAL_ERROR;
