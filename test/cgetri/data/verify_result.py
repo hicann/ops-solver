@@ -10,64 +10,29 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
+import os
 import sys
-import numpy as np
 
-# for float32
-relative_tol = 5e-3
-absolute_tol = 5e-3
-error_tol = 1e-4
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "utils")
+)
+from verify_utils import DTYPE_COMPLEX64, run_verification  # noqa: E402
 
 
-def verify_result(A, invA, N):
-    A = np.fromfile(A, dtype=np.complex64).reshape(N, N)
-    invA = np.fromfile(invA, dtype=np.complex64).reshape(N, N)
-
-    output = np.dot(A, invA).reshape(-1)
-    golden = np.eye(N).astype(np.complex64).reshape(-1)
-    different_element_results = np.isclose(
-        output, golden, rtol=relative_tol, atol=absolute_tol, equal_nan=True
+def format_mismatch(index, expected, actual):
+    rdiff = abs(actual - expected) / abs(expected)
+    return (
+        f"data index: {index:08d}, expected: {expected.real:.9f}{expected.imag:+.9f}j, "
+        f"actual: {actual.real:.9f}{actual.imag:+.9f}j, rdiff: {rdiff:.6f}"
     )
-    different_element_indexes = np.where(different_element_results == False)[0]
-    for index in range(len(different_element_indexes)):
-        real_index = different_element_indexes[index]
-        golden_data = golden[real_index]
-        output_data = output[real_index]
-        print(
-            "data index: %08d, expected: %.9f%+.9fj, actual: %.9f%+.9fj, rdiff: %.6f"
-            % (
-                real_index,
-                golden_data.real,
-                golden_data.imag,
-                output_data.real,
-                output_data.imag,
-                abs(output_data - golden_data) / abs(golden_data),
-            )
-        )
-        if index >= 32:
-            break
-    error_ratio = float(different_element_indexes.size) / golden.size
-    print("error ratio: %.4f, tolerance: %.4f" % (error_ratio, error_tol))
-    return error_ratio <= error_tol
 
 
 if __name__ == "__main__":
-    try:
-        res = (
-            verify_result(
-                "./test/cgetri/data/input/A_gm.bin",
-                "./test/cgetri/data/output/A_gm.bin",
-                int(sys.argv[1]),
-            )
-            if len(sys.argv) > 1
-            else 32
+    sys.exit(
+        run_verification(
+            "./test/cgetri/data/input/A_gm.bin",
+            "./test/cgetri/data/output/A_gm.bin",
+            DTYPE_COMPLEX64,
+            format_mismatch,
         )
-        if not res:
-            print("[Failed] Case accuracy verification failed.")
-            sys.exit(1)
-        else:
-            print("[Success] Case accuracy is verification passed.")
-            sys.exit(0) 
-    except Exception as e:
-        print(e)
-        sys.exit(1)
+    )
