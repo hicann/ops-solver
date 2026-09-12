@@ -59,7 +59,7 @@ def run_verification(input_path, inv_path, dtype, format_mismatch):
         logging.error("%s", err)
         return 1
     if passed:
-        logging.info("[Success] Case accuracy is verification passed.")
+        logging.info("[Success] Case accuracy verification passed.")
         return 0
     logging.info("[Failed] Case accuracy verification failed.")
     return 1

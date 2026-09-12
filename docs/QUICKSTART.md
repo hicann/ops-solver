@@ -185,7 +185,7 @@ host侧负责参数校验、数据准备、Tiling计算和内存管理。Tiling�
 
 #### cmatinv_batched_host.cpp
 
-文件路径：`src/cmatinv_batched/cmatinv_batched_host.cpp`  
+文件路径：`src/cmatinv_batched/cmatinv_batched_host.cpp`
 主要功能：参数校验、数据准备、Tiling计算和内存管理。
 
 ```c++
@@ -293,14 +293,14 @@ aclError aclsolverCmatinvBatched(aclsolverHandle_t handle, const int64_t n, std:
         LOG_PRINT("CmatinvBatched only supports n ≤ 32. For n > 32, use CgetriBatched instead.\n");
         return aclsolverCgetriBatched(handle, n, A, lda, Ainv, lda_inv, info, batchSize);
     }
-    
+
     // 获取设备核心数量，此处获取cube核，GetCoreNumAiv可以获取vector核
     auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
     uint32_t numBlocks = 0;
     if (ascendcPlatform != nullptr) {
         numBlocks = ascendcPlatform->GetCoreNumAic();
     }
-    
+
     // 参数校验
     SOLVER_ECHECK(n > 0 && batchSize > 0, "CmatinvBatched get n <= 0 || batchSize <= 0.", ACL_ERROR_INVALID_PARAM);
     SOLVER_ECHECK(n <= MAX_MATRIX_SHAPE && batchSize <= MAX_MATRIX_BATCH,
@@ -430,7 +430,7 @@ kernel侧负责实际的矩阵求逆计算。Kernel相关的`Compute`、`CopyIn`
 
 ### cmatinv_batched_kernel.cpp
 
-文件路径：`src/cmatinv_batched/cmatinv_batched_kernel.cpp`  
+文件路径：`src/cmatinv_batched/cmatinv_batched_kernel.cpp`
 主要功能：核函数入口，解析Tiling数据并调用算子类; 定义CmatinvBatchedAIV模板类，实现矩阵求逆的核心算法。
 
 #### 核函数入口
@@ -628,7 +628,7 @@ template <typename T>
 __aicore__ inline void CmatinvBatchedAIV<T>::InitUbuf()
 {
     /*
-        can proces 64kb one time,
+        can process 64kb one time,
         can be 8 * 32 * 32 ~ 128 * 8 * 8 ~ 512 * 2 * 8 (complex64 num)
         the batch size ranges [8, 512]
         the size of matrix ranges [2, 32]
@@ -795,14 +795,14 @@ __aicore__ inline void CmatinvBatchedAIV<T>::SingleProcess()
     ComputeComplexScalarOffset();
     PipeBarrier<PIPE_ALL>();
     for (uint16_t elementIdx = 0; elementIdx < this->n; elementIdx++) {
-        // iterate diagnal elements
-        // collect diagnal element, e.g., aii
+        // iterate diagonal elements
+        // collect diagonal element, e.g., aii
         uint32_t preOffset = elementIdx * this->alignedComplexMatSize + elementIdx;
         CollectScalarSingle(this->preLocal, preOffset);
 
         uint32_t eleOffset = elementIdx * this->alignedComplexMatSize;
         LocalTensor<float> tmpAiReal = this->matRealLocal[eleOffset];
-        LocalTensor<float> tmpAiRmag = this->matImagLocal[eleOffset];
+        LocalTensor<float> tmpAiImag = this->matImagLocal[eleOffset];
         LocalTensor<float> tmpAiInvReal = this->invRealLocal[eleOffset];
         LocalTensor<float> tmpAiInvImag = this->invImagLocal[eleOffset];
 
@@ -828,7 +828,7 @@ __aicore__ inline void CmatinvBatchedAIV<T>::SingleProcess()
 
             // compute and update A[j,:] = A[j,:] - (aji / aii) * A[i,:]
             // (aji / aii) * A[i,:]
-            ComplexScalarVecBatchMul(tmpAiReal, tmpAiRmag, this->oneMatUbOffsetFp32);
+            ComplexScalarVecBatchMul(tmpAiReal, tmpAiImag, this->oneMatUbOffsetFp32);
             PipeBarrier<PIPE_V>();
 
             ComputeAndUpdateAj(tmpAjReal, tmpAjImag, this->oneMatUbOffsetFp32);
@@ -843,7 +843,7 @@ __aicore__ inline void CmatinvBatchedAIV<T>::SingleProcess()
         }
 
         // update A[i,:] = A[i,:] / aii
-        ComplexVecScalarBatchDiv(tmpAiReal, tmpAiRmag, this->oneMatUbOffsetFp32);
+        ComplexVecScalarBatchDiv(tmpAiReal, tmpAiImag, this->oneMatUbOffsetFp32);
         PipeBarrier<PIPE_V>();
 
         ComplexVecScalarBatchDiv(tmpAiInvReal, tmpAiInvImag, this->oneMatUbOffsetFp32);
@@ -881,12 +881,12 @@ __aicore__ inline void CmatinvBatchedAIV<T>::CopyUniMatBatchGmToUb(LocalTensor<f
     /*
         GM matrix shape:
             | a11, a12, ..., a1n|
-            | a21, a12, ..., a1n|
+            | a21, a22, ..., a2n|
             | ..., ..., ..., ...|
             | an1, ..., ..., ann|
         UB matrix shape:
             | a11, a12, ..., a1n, 0, 0, ..., 0| // padding
-            | a21, a12, ..., a1n, 0, 0, ..., 0|
+            | a21, a22, ..., a2n, 0, 0, ..., 0|
             | ..., ..., ..., ..., 0, 0, ..., 0|
             | an1, ..., ..., ann, 0, 0, ..., 0|
     */
@@ -1223,10 +1223,10 @@ __aicore__ inline void CmatinvBatchedAIV<T>::ComputeAndUpdateAj(LocalTensor<floa
     LocalTensor<float> tempRealInner = this->updateTempRealLocal; // size: matAlignedSize * batchSize
     LocalTensor<float> tempImagInner = this->updateTempImagLocal; // size: matAlignedSize * batchSize
 
-    // compuate and update A[j,:] real part
+    // compute and update A[j,:] real part
     RealScalarVecBatchSub(AjReal, tempRealInner, oneMatOffset);
 
-    // compuate and update A[j,:] imag part
+    // compute and update A[j,:] imag part
     RealScalarVecBatchSub(AjImag, tempImagInner, oneMatOffset);
 }
 
@@ -1389,7 +1389,7 @@ __aicore__ inline void CmatinvBatchedAIV<T>::ComplexCombinationAndCopyout(uint32
 算子实现后，在`test`目录下新增目录`cmatinv_batched`，补充算子测试用例，测试算子的正确性。
 
 ### gen_data.py
-文件路径：`test/cmatinv_batched/data/gen_data.py`  
+文件路径：`test/cmatinv_batched/data/gen_data.py`
 主要功能：生成测试用例的输入数据和期望输出数据。
 
 ```python
@@ -1451,7 +1451,7 @@ print("Product of A and inv(A) (first 3x3):\n", product[:3, :3])
 ```
 
 ### verify_result.py
-文件路径：`test/cmatinv_batched/data/verify_result.py`  
+文件路径：`test/cmatinv_batched/data/verify_result.py`
 主要功能：验证算子输出结果是否正确。
 
 ```python
@@ -1524,7 +1524,7 @@ if __name__ == "__main__":
             print("[Failed] Case accuracy verification failed.")
             sys.exit(1)
         else:
-            print("[Success] Case accuracy is verification passed.")
+            print("[Success] Case accuracy verification passed.")
             sys.exit(0)
     except Exception as e:
         print(e)
@@ -1532,7 +1532,7 @@ if __name__ == "__main__":
 ```
 
 ### cmatinv_batched_test.cpp
-文件路径：`test/cmatinv_batched/cmatinv_batched_test.cpp`  
+文件路径：`test/cmatinv_batched/cmatinv_batched_test.cpp`
 主要功能：运行算子测试用例。
 
 ```c++
@@ -1585,7 +1585,7 @@ int32_t main(int32_t argc, char *argv[])
 
     std::cout << "[Output] Ainv:" << std::endl;
     printTensor(Ainv.data(), batchSize, n, n);
-    
+
     // 保存输出数据
     WriteFile("./test/cmatinv_batched/data/output/Ainv_gm.bin", Ainv.data(), aMatrixFileSize);
 
@@ -1601,7 +1601,7 @@ int32_t main(int32_t argc, char *argv[])
 ```
 
 ### CMakeLists.txt
-文件路径：`test/cmatinv_batched/CMakeLists.txt`  
+文件路径：`test/cmatinv_batched/CMakeLists.txt`
 主要功能：配置算子测试用例的编译规则。
 
 ```cmake
@@ -1658,7 +1658,7 @@ step 2: run cmatinv_batched_test...
 
 step 3: verify result...
 error ratio: 0.0000, tolerance: 0.0001
-[Success] Case accuracy is verification passed.
+[Success] Case accuracy verification passed.
 [PASS] cmatinv_batched_test
 Test for cmatinv_batched completed.
 

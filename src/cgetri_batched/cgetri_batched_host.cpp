@@ -59,8 +59,48 @@ struct CgetriBatchedTilingData
     uint32_t tileM;
 };
 
+// Host-side staging buffers for a full batch can reach several GiB at the
+// documented upper bounds (n=256, batch=3000).  Reject combinations whose
+// staging footprint exceeds a conservative budget instead of attempting a
+// multi-GiB host allocation, and translate any allocation failure into an
+// error code rather than letting std::bad_alloc escape the C boundary
+// (issue #127).
+aclError CgetriBatchedImpl(aclsolverHandle_t handle, const int64_t n, std::complex<float> *A, const int64_t lda,
+                           std::complex<float> *Ainv, const int64_t lda_inv, int32_t *info, int64_t batchSize);
+
 aclError aclsolverCgetriBatched(aclsolverHandle_t handle, const int64_t n, std::complex<float> *A, const int64_t lda,
                                 std::complex<float> *Ainv, const int64_t lda_inv, int32_t *info, int64_t batchSize)
+{
+    // Staging guard: eyeBatchMatData alone is batchNum * eyeMatEleNum floats
+    // and the packed work buffers add more; cap the combined estimate.
+    const int64_t alignedN = (n + COL_ALIGNED_ELENUM - 1) / COL_ALIGNED_ELENUM * COL_ALIGNED_ELENUM;
+    const int64_t paddedM = (n + BASE_BLOCK_ELENUM - 1) / BASE_BLOCK_ELENUM * BASE_BLOCK_ELENUM + COL_ALIGNED_ELENUM;
+    const int64_t eyeMatEleNum = alignedN * paddedM * EYE_MATRIX_NUM;
+    const int64_t workEleNum = ((n + TILE_ELENUM - 1) / TILE_ELENUM * TILE_ELENUM) * BASE_BLOCK_ELENUM * COMPLEX_ELENUM;
+    constexpr double kMaxStagingGiB = 8.0;
+    const double stagingGiB = static_cast<double>(batchSize) * static_cast<double>(eyeMatEleNum + workEleNum) *
+                              sizeof(float) / (1024.0 * 1024.0 * 1024.0);
+    SOLVER_ECHECK(stagingGiB <= kMaxStagingGiB,
+                  "CgetriBatched host staging buffers exceed the supported memory budget for this n/batchSize.",
+                  ACL_ERROR_INVALID_PARAM);
+    try
+    {
+        return CgetriBatchedImpl(handle, n, A, lda, Ainv, lda_inv, info, batchSize);
+    }
+    catch (const std::bad_alloc &)
+    {
+        std::cerr << "CgetriBatched host allocation failed for n=" << n << " batchSize=" << batchSize << std::endl;
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "CgetriBatched unexpected host failure: " << e.what() << std::endl;
+        return ACL_ERROR_INTERNAL_ERROR;
+    }
+}
+
+aclError CgetriBatchedImpl(aclsolverHandle_t handle, const int64_t n, std::complex<float> *A, const int64_t lda,
+                           std::complex<float> *Ainv, const int64_t lda_inv, int32_t *info, int64_t batchSize)
 {
     aclrtStream stream = nullptr;
     if (handle != nullptr)

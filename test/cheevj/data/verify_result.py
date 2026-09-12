@@ -213,7 +213,7 @@ if __name__ == "__main__":
             LOGGER.info("[Failed] Case accuracy verification failed.")
             sys.exit(1)
 
-        LOGGER.info("[Success] Case accuracy is verification passed.")
+        LOGGER.info("[Success] Case accuracy verification passed.")
         sys.exit(0)
     except Exception as err:
         LOGGER.info(err)

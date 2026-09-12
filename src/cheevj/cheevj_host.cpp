@@ -21,6 +21,7 @@
 #include <cstring>
 #include <iostream>
 #include <limits>
+#include <new>
 #include <vector>
 
 #include "../utils/assert.h"
@@ -35,7 +36,9 @@
 // The upstream helper gained a caller-supplied cleanup argument after this
 // implementation was developed; a private wrapper avoids changing the error
 // contract of every other solver while the Cheevj paths are normalized.
-#define CHEEVJ_CHECK_ACLRT(function)                                                   \
+// CHEEVJ_CHECK_ACLRT runs the caller-supplied cleanup before returning so
+// device buffers acquired before the failure are released (issue #121).
+#define CHEEVJ_CHECK_ACLRT(function, cleanup_action)                                   \
     do                                                                                 \
     {                                                                                  \
         const aclError cheevjAclStatus = (function);                                   \
@@ -43,6 +46,7 @@
         {                                                                              \
             std::cerr << "Cheevj ACL runtime error at " << __FILE__ << ':' << __LINE__ \
                       << " (error code: " << cheevjAclStatus << ')' << std::endl;      \
+            cleanup_action;                                                            \
             return cheevjAclStatus;                                                    \
         }                                                                              \
     } while (0)
@@ -106,10 +110,7 @@ bool IsUpperMode(int32_t uplo)
            uplo == static_cast<int32_t>('u') || uplo == 121;
 }
 
-int64_t AlignUp(int64_t value, int64_t align)
-{
-    return align > 0 ? (value + align - 1) / align * align : value;
-}
+int64_t AlignUp(int64_t value, int64_t align) { return align > 0 ? (value + align - 1) / align * align : value; }
 
 int64_t CompactColumnMajorIndex(int64_t row, int64_t col, int64_t n) { return row + col * n; }
 
@@ -150,10 +151,7 @@ bool CheckedSquareSize(int64_t n, size_t elementBytes, size_t* elements, size_t*
     return true;
 }
 
-bool IsFixedShape(int64_t n)
-{
-    return n == CHEEVJ_FIXED_N512 || n == CHEEVJ_FIXED_N1024 || n == CHEEVJ_FIXED_N2048;
-}
+bool IsFixedShape(int64_t n) { return n == CHEEVJ_FIXED_N512 || n == CHEEVJ_FIXED_N1024 || n == CHEEVJ_FIXED_N2048; }
 
 int64_t NextFixedShape(int64_t n)
 {
@@ -215,7 +213,7 @@ bool IsInputDiagonal(const Complex* a, int64_t lda, int64_t n, bool lower)
     if (n >= 1024)
     {
         int isDiagonal = 1;
-#pragma omp parallel for num_threads(16) schedule(static) reduction(&: isDiagonal)
+#pragma omp parallel for num_threads(16) schedule(static) reduction(& : isDiagonal)
         for (int64_t col = 0; col < n; ++col)
         {
             const int64_t rowBegin = lower ? col + 1 : 0;
@@ -246,7 +244,7 @@ bool IsInputTwoByTwoBlockDiagonal(const Complex* a, int64_t lda, int64_t n, bool
     if (n >= 1024)
     {
         int isBlockDiagonal = 1;
-#pragma omp parallel for num_threads(16) schedule(static) reduction(&: isBlockDiagonal)
+#pragma omp parallel for num_threads(16) schedule(static) reduction(& : isBlockDiagonal)
         for (int64_t col = 0; col < n; ++col)
         {
             const bool hasStoredBlockMate = lower ? (col % 2 == 0 && col + 1 < n) : (col % 2 != 0);
@@ -356,9 +354,8 @@ void SolveInputDiagonal(Complex* a, int64_t lda, int64_t n, bool computeVectors,
     {
         permutation[static_cast<size_t>(index)] = index;
     }
-    std::stable_sort(permutation.begin(), permutation.end(), [a, lda](int64_t lhs, int64_t rhs) {
-        return a[lhs + lhs * lda].real() < a[rhs + rhs * lda].real();
-    });
+    std::stable_sort(permutation.begin(), permutation.end(), [a, lda](int64_t lhs, int64_t rhs)
+                     { return a[lhs + lhs * lda].real() < a[rhs + rhs * lda].real(); });
     for (int64_t column = 0; column < n; ++column)
     {
         const int64_t source = permutation[static_cast<size_t>(column)];
@@ -395,10 +392,7 @@ bool IsCompactBlockDiagonal(const std::vector<Complex>& packed, int64_t n)
     return true;
 }
 
-bool IsCompactDiagonal(const std::vector<Complex>& packed, int64_t n)
-{
-    return IsCompactBlockDiagonal<1>(packed, n);
-}
+bool IsCompactDiagonal(const std::vector<Complex>& packed, int64_t n) { return IsCompactBlockDiagonal<1>(packed, n); }
 
 bool IsCompactTwoByTwoBlockDiagonal(const std::vector<Complex>& packed, int64_t n)
 {
@@ -412,10 +406,12 @@ void SolveCompactDiagonal(std::vector<Complex>* packed, int64_t n, bool computeV
     {
         permutation[static_cast<size_t>(index)] = index;
     }
-    std::stable_sort(permutation.begin(), permutation.end(), [packed, n](int64_t lhs, int64_t rhs) {
-        return (*packed)[static_cast<size_t>(CompactColumnMajorIndex(lhs, lhs, n))].real() <
-               (*packed)[static_cast<size_t>(CompactColumnMajorIndex(rhs, rhs, n))].real();
-    });
+    std::stable_sort(permutation.begin(), permutation.end(),
+                     [packed, n](int64_t lhs, int64_t rhs)
+                     {
+                         return (*packed)[static_cast<size_t>(CompactColumnMajorIndex(lhs, lhs, n))].real() <
+                                (*packed)[static_cast<size_t>(CompactColumnMajorIndex(rhs, rhs, n))].real();
+                     });
     for (int64_t column = 0; column < n; ++column)
     {
         const int64_t source = permutation[static_cast<size_t>(column)];
@@ -452,8 +448,8 @@ inline void SortCompactEigenpairs(std::vector<CompactEigenpair>* eigenpairs, int
     }
 }
 
-void AppendTwoByTwoEigenpairs(std::vector<CompactEigenpair>* eigenpairs, int64_t first, int64_t second,
-                              float diagonal0, float diagonal1, Complex upper)
+void AppendTwoByTwoEigenpairs(std::vector<CompactEigenpair>* eigenpairs, int64_t first, int64_t second, float diagonal0,
+                              float diagonal1, Complex upper)
 {
     const double center = 0.5 * (static_cast<double>(diagonal0) + static_cast<double>(diagonal1));
     const double halfDifference = 0.5 * (static_cast<double>(diagonal0) - static_cast<double>(diagonal1));
@@ -475,9 +471,7 @@ void AppendTwoByTwoEigenpairs(std::vector<CompactEigenpair>* eigenpairs, int64_t
     Complex low1(low - diagonal0, 0.0f);
     const Complex alternate0(low - diagonal1, 0.0f);
     const Complex alternate1 = std::conj(upper);
-    const auto squaredNorm = [](Complex value) {
-        return std::norm(static_cast<std::complex<double>>(value));
-    };
+    const auto squaredNorm = [](Complex value) { return std::norm(static_cast<std::complex<double>>(value)); };
     if (squaredNorm(alternate0) + squaredNorm(alternate1) > squaredNorm(low0) + squaredNorm(low1))
     {
         low0 = alternate0;
@@ -501,15 +495,14 @@ void SolveInputTwoByTwoBlockDiagonal(Complex* a, int64_t lda, int64_t n, bool lo
     {
         if (first + 1 == n)
         {
-            eigenpairs.push_back({a[first + first * lda].real(), first, first, Complex(1.0f, 0.0f),
-                                  Complex(0.0f, 0.0f)});
+            eigenpairs.push_back(
+                {a[first + first * lda].real(), first, first, Complex(1.0f, 0.0f), Complex(0.0f, 0.0f)});
             continue;
         }
 
         const int64_t second = first + 1;
         AppendTwoByTwoEigenpairs(&eigenpairs, first, second, a[first + first * lda].real(),
-                                 a[second + second * lda].real(),
-                                 LoadHermitianValue(a, lda, first, second, lower));
+                                 a[second + second * lda].real(), LoadHermitianValue(a, lda, first, second, lower));
     }
 
     SortCompactEigenpairs(&eigenpairs, n, w);
@@ -537,18 +530,16 @@ void SolveCompactTwoByTwoBlockDiagonal(std::vector<Complex>* packed, int64_t n, 
     {
         if (first + 1 == n)
         {
-            const float value =
-                (*packed)[static_cast<size_t>(CompactColumnMajorIndex(first, first, n))].real();
+            const float value = (*packed)[static_cast<size_t>(CompactColumnMajorIndex(first, first, n))].real();
             eigenpairs.push_back({value, first, first, Complex(1.0f, 0.0f), Complex(0.0f, 0.0f)});
             continue;
         }
 
         const int64_t second = first + 1;
-        AppendTwoByTwoEigenpairs(
-            &eigenpairs, first, second,
-            (*packed)[static_cast<size_t>(CompactColumnMajorIndex(first, first, n))].real(),
-            (*packed)[static_cast<size_t>(CompactColumnMajorIndex(second, second, n))].real(),
-            (*packed)[static_cast<size_t>(CompactColumnMajorIndex(first, second, n))]);
+        AppendTwoByTwoEigenpairs(&eigenpairs, first, second,
+                                 (*packed)[static_cast<size_t>(CompactColumnMajorIndex(first, first, n))].real(),
+                                 (*packed)[static_cast<size_t>(CompactColumnMajorIndex(second, second, n))].real(),
+                                 (*packed)[static_cast<size_t>(CompactColumnMajorIndex(first, second, n))]);
     }
 
     SortCompactEigenpairs(&eigenpairs, n, w);
@@ -639,8 +630,7 @@ double RunJacobiSweep(std::vector<DoubleComplex>* work, std::vector<DoubleComple
             const double app = (*work)[pp].real();
             const double aqq = (*work)[qq].real();
             const double tau = (aqq - app) / (2.0 * magnitude);
-            const double tangent =
-                (tau >= 0.0 ? 1.0 : -1.0) / (std::abs(tau) + std::sqrt(1.0 + tau * tau));
+            const double tangent = (tau >= 0.0 ? 1.0 : -1.0) / (std::abs(tau) + std::sqrt(1.0 + tau * tau));
             const double cosine = 1.0 / std::sqrt(1.0 + tangent * tangent);
             const DoubleComplex sine =
                 magnitude > 0.0 ? tangent * cosine * offDiagonal / magnitude : DoubleComplex(0.0, 0.0);
@@ -658,15 +648,16 @@ std::vector<int64_t> SortJacobiEigenpairs(const std::vector<DoubleComplex>& work
     {
         permutation[static_cast<size_t>(index)] = index;
     }
-    std::stable_sort(permutation.begin(), permutation.end(), [&work, n](int64_t lhs, int64_t rhs) {
-        return work[static_cast<size_t>(CompactColumnMajorIndex(lhs, lhs, n))].real() <
-               work[static_cast<size_t>(CompactColumnMajorIndex(rhs, rhs, n))].real();
-    });
+    std::stable_sort(permutation.begin(), permutation.end(),
+                     [&work, n](int64_t lhs, int64_t rhs)
+                     {
+                         return work[static_cast<size_t>(CompactColumnMajorIndex(lhs, lhs, n))].real() <
+                                work[static_cast<size_t>(CompactColumnMajorIndex(rhs, rhs, n))].real();
+                     });
     for (int64_t column = 0; column < n; ++column)
     {
         const int64_t source = permutation[static_cast<size_t>(column)];
-        w[column] =
-            static_cast<float>(work[static_cast<size_t>(CompactColumnMajorIndex(source, source, n))].real());
+        w[column] = static_cast<float>(work[static_cast<size_t>(CompactColumnMajorIndex(source, source, n))].real());
     }
     return permutation;
 }
@@ -740,8 +731,8 @@ int64_t FindTridiagonalBlockEnd(const std::vector<double>& diagonal, const std::
     int64_t right = left;
     for (; right + 1 < n; ++right)
     {
-        const double scale = std::abs(diagonal[static_cast<size_t>(right)]) +
-                             std::abs(diagonal[static_cast<size_t>(right + 1)]);
+        const double scale =
+            std::abs(diagonal[static_cast<size_t>(right)]) + std::abs(diagonal[static_cast<size_t>(right + 1)]);
         if (std::abs(offDiagonal[static_cast<size_t>(right)]) <= epsilon * scale)
         {
             break;
@@ -871,8 +862,8 @@ bool BuildHouseholderReflector(const std::vector<DoubleComplex>& work, int64_t n
 }
 
 std::vector<DoubleComplex> BuildHouseholderUpdate(const std::vector<DoubleComplex>& work,
-                                                  const std::vector<DoubleComplex>& reflector, int64_t n,
-                                                  int64_t begin, double beta)
+                                                  const std::vector<DoubleComplex>& reflector, int64_t n, int64_t begin,
+                                                  double beta)
 {
     const int64_t active = n - begin;
     std::vector<DoubleComplex> update(static_cast<size_t>(active));
@@ -961,9 +952,9 @@ void BuildRealTridiagonal(const std::vector<DoubleComplex>& work, const std::vec
             const DoubleComplex value = subDiagonal[static_cast<size_t>(index)];
             const double magnitude = std::abs(value);
             (*offDiagonal)[static_cast<size_t>(index)] = magnitude;
-            (*phases)[static_cast<size_t>(index + 1)] =
-                magnitude > 0.0 ? (*phases)[static_cast<size_t>(index)] * value / magnitude
-                                : (*phases)[static_cast<size_t>(index)];
+            (*phases)[static_cast<size_t>(index + 1)] = magnitude > 0.0
+                                                            ? (*phases)[static_cast<size_t>(index)] * value / magnitude
+                                                            : (*phases)[static_cast<size_t>(index)];
         }
     }
 }
@@ -975,9 +966,8 @@ std::vector<int64_t> SortRealEigenpairs(const std::vector<double>& diagonal, int
     {
         permutation[static_cast<size_t>(index)] = index;
     }
-    std::stable_sort(permutation.begin(), permutation.end(), [&diagonal](int64_t lhs, int64_t rhs) {
-        return diagonal[static_cast<size_t>(lhs)] < diagonal[static_cast<size_t>(rhs)];
-    });
+    std::stable_sort(permutation.begin(), permutation.end(), [&diagonal](int64_t lhs, int64_t rhs)
+                     { return diagonal[static_cast<size_t>(lhs)] < diagonal[static_cast<size_t>(rhs)]; });
     for (int64_t column = 0; column < n; ++column)
     {
         w[column] = static_cast<float>(diagonal[static_cast<size_t>(permutation[static_cast<size_t>(column)])]);
@@ -999,8 +989,7 @@ std::vector<DoubleComplex> BacktransformHouseholderVectors(const std::vector<Dou
         DoubleComplex* output = eigenvectors.data() + column * n;
         for (int64_t row = 0; row < n; ++row)
         {
-            output[row] = phases[static_cast<size_t>(row)] *
-                          tridiagonalVectors[static_cast<size_t>(row + source * n)];
+            output[row] = phases[static_cast<size_t>(row)] * tridiagonalVectors[static_cast<size_t>(row + source * n)];
         }
         for (int64_t step = n - 2; step-- > 0;)
         {
@@ -1051,8 +1040,8 @@ bool SolveCompactHostHouseholder(std::vector<Complex>* matrix, int64_t n, bool c
     {
         for (int64_t col = 0; col < n; ++col)
         {
-            work[static_cast<size_t>(row * n + col)] = static_cast<DoubleComplex>(
-                (*matrix)[static_cast<size_t>(CompactColumnMajorIndex(row, col, n))]);
+            work[static_cast<size_t>(row * n + col)] =
+                static_cast<DoubleComplex>((*matrix)[static_cast<size_t>(CompactColumnMajorIndex(row, col, n))]);
         }
     }
 
@@ -1074,8 +1063,7 @@ bool SolveCompactHostHouseholder(std::vector<Complex>* matrix, int64_t n, bool c
             tridiagonalVectors[static_cast<size_t>(CompactColumnMajorIndex(index, index, n))] = 1.0;
         }
     }
-    if (!SolveRealSymmetricTridiagonal(&diagonal, &realOffDiagonal,
-                                       computeVectors ? &tridiagonalVectors : nullptr, n))
+    if (!SolveRealSymmetricTridiagonal(&diagonal, &realOffDiagonal, computeVectors ? &tridiagonalVectors : nullptr, n))
     {
         return false;
     }
@@ -1132,8 +1120,7 @@ void ApplyVectorsToProbes(const std::vector<Complex>& vectors, const std::vector
             const Complex value = vectors[static_cast<size_t>(col * n + row)];
             for (int probe = 0; probe < ORTHOGONALITY_PROBE_COUNT; ++probe)
             {
-                sums[static_cast<size_t>(probe)] +=
-                    value * probeValues[static_cast<size_t>(probe * n + col)];
+                sums[static_cast<size_t>(probe)] += value * probeValues[static_cast<size_t>(probe * n + col)];
             }
         }
         for (int probe = 0; probe < ORTHOGONALITY_PROBE_COUNT; ++probe)
@@ -1155,8 +1142,7 @@ void ApplyAdjointToProbes(const std::vector<Complex>& vectors, const std::vector
             const Complex value = std::conj(vectors[static_cast<size_t>(col * n + row)]);
             for (int probe = 0; probe < ORTHOGONALITY_PROBE_COUNT; ++probe)
             {
-                sums[static_cast<size_t>(probe)] +=
-                    value * transformed[static_cast<size_t>(probe * n + row)];
+                sums[static_cast<size_t>(probe)] += value * transformed[static_cast<size_t>(probe * n + row)];
             }
         }
         for (int probe = 0; probe < ORTHOGONALITY_PROBE_COUNT; ++probe)
@@ -1169,8 +1155,8 @@ void ApplyAdjointToProbes(const std::vector<Complex>& vectors, const std::vector
 #include "cheevj_fixed_host.inc"
 
 aclError CopyCompleteVectorOutput(uint8_t* deviceInfo, uint8_t* eigenvalues, const FixedMatrixSlices& matrix,
-                                  const FixedWorkspaceSizes& sizes, std::vector<Complex>* packedA, int64_t n,
-                                  float* w, int32_t* info)
+                                  const FixedWorkspaceSizes& sizes, std::vector<Complex>* packedA, int64_t n, float* w,
+                                  int32_t* info)
 {
     aclError status = CopyFixedEigenvalues(deviceInfo, eigenvalues, sizes.vectorBytes, w, info);
     if (status != ACL_SUCCESS || *info != 0)
@@ -1181,16 +1167,38 @@ aclError CopyCompleteVectorOutput(uint8_t* deviceInfo, uint8_t* eigenvalues, con
 }
 
 aclError AllocateCompleteVectorWorkspace(const FixedWorkspaceSizes& sizes, size_t auxiliaryBytes, size_t infoBytes,
-                                         uint8_t** matrixWorkspace, uint8_t** auxiliaryWorkspace,
-                                         uint8_t** deviceInfo)
+                                         uint8_t** matrixWorkspace, uint8_t** auxiliaryWorkspace, uint8_t** deviceInfo)
 {
+    // Release any buffer acquired before a later allocation/memset fails so the
+    // caller never has to handle partially initialized workspaces (issue #121).
+    auto releaseAcquired = [&]()
+    {
+        if (*matrixWorkspace != nullptr)
+        {
+            (void)aclrtFree(*matrixWorkspace);
+            *matrixWorkspace = nullptr;
+        }
+        if (*auxiliaryWorkspace != nullptr)
+        {
+            (void)aclrtFree(*auxiliaryWorkspace);
+            *auxiliaryWorkspace = nullptr;
+        }
+        if (*deviceInfo != nullptr)
+        {
+            (void)aclrtFree(*deviceInfo);
+            *deviceInfo = nullptr;
+        }
+    };
     CHEEVJ_CHECK_ACLRT(
-        aclrtMalloc(reinterpret_cast<void**>(matrixWorkspace), sizes.sixPlaneBytes, ACL_MEM_MALLOC_HUGE_FIRST));
+        aclrtMalloc(reinterpret_cast<void**>(matrixWorkspace), sizes.sixPlaneBytes, ACL_MEM_MALLOC_HUGE_FIRST),
+        releaseAcquired());
     CHEEVJ_CHECK_ACLRT(
-        aclrtMalloc(reinterpret_cast<void**>(auxiliaryWorkspace), auxiliaryBytes, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHEEVJ_CHECK_ACLRT(aclrtMalloc(reinterpret_cast<void**>(deviceInfo), infoBytes, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHEEVJ_CHECK_ACLRT(aclrtMemset(*matrixWorkspace, sizes.sixPlaneBytes, 0, sizes.sixPlaneBytes));
-    CHEEVJ_CHECK_ACLRT(aclrtMemset(*auxiliaryWorkspace, auxiliaryBytes, 0, auxiliaryBytes));
+        aclrtMalloc(reinterpret_cast<void**>(auxiliaryWorkspace), auxiliaryBytes, ACL_MEM_MALLOC_HUGE_FIRST),
+        releaseAcquired());
+    CHEEVJ_CHECK_ACLRT(aclrtMalloc(reinterpret_cast<void**>(deviceInfo), infoBytes, ACL_MEM_MALLOC_HUGE_FIRST),
+                       releaseAcquired());
+    CHEEVJ_CHECK_ACLRT(aclrtMemset(*matrixWorkspace, sizes.sixPlaneBytes, 0, sizes.sixPlaneBytes), releaseAcquired());
+    CHEEVJ_CHECK_ACLRT(aclrtMemset(*auxiliaryWorkspace, auxiliaryBytes, 0, auxiliaryBytes), releaseAcquired());
     return ACL_SUCCESS;
 }
 
@@ -1211,8 +1219,29 @@ aclError RunCompleteVector(std::vector<Complex>* packedA, int64_t n, float* w, i
     uint8_t* matrixWorkspace = nullptr;
     uint8_t* auxiliaryWorkspace = nullptr;
     uint8_t* deviceInfo = nullptr;
+    // Release all three device workspaces on any failure so error paths no
+    // longer leak the buffers acquired before the failure (issue #121).
+    auto releaseWorkspaces = [&]()
+    {
+        if (matrixWorkspace != nullptr)
+        {
+            (void)aclrtFree(matrixWorkspace);
+            matrixWorkspace = nullptr;
+        }
+        if (auxiliaryWorkspace != nullptr)
+        {
+            (void)aclrtFree(auxiliaryWorkspace);
+            auxiliaryWorkspace = nullptr;
+        }
+        if (deviceInfo != nullptr)
+        {
+            (void)aclrtFree(deviceInfo);
+            deviceInfo = nullptr;
+        }
+    };
     CHEEVJ_CHECK_ACLRT(AllocateCompleteVectorWorkspace(sizes, auxiliaryBytes, infoBytes, &matrixWorkspace,
-                                                       &auxiliaryWorkspace, &deviceInfo));
+                                                       &auxiliaryWorkspace, &deviceInfo),
+                       releaseWorkspaces());
 
     const FixedMatrixSlices matrix = TakeFixedMatrixSlices(matrixWorkspace, sizes.matrixBytes);
     const FixedPanelSlices panel = TakeFixedPanelSlices(auxiliaryWorkspace, sizes);
@@ -1224,15 +1253,18 @@ aclError RunCompleteVector(std::vector<Complex>* packedA, int64_t n, float* w, i
     uint8_t* commandWorkspace = TakeWorkspaceSlice(auxiliaryWorkspace, &auxiliaryOffset, commandBytes);
 
     CHEEVJ_CHECK_ACLRT(
-        aclrtMemcpy(matrix.real, sizes.matrixBytes, inputReal.data(), sizes.matrixBytes, ACL_MEMCPY_HOST_TO_DEVICE));
+        aclrtMemcpy(matrix.real, sizes.matrixBytes, inputReal.data(), sizes.matrixBytes, ACL_MEMCPY_HOST_TO_DEVICE),
+        releaseWorkspaces());
     CHEEVJ_CHECK_ACLRT(
-        aclrtMemcpy(matrix.imag, sizes.matrixBytes, inputImag.data(), sizes.matrixBytes, ACL_MEMCPY_HOST_TO_DEVICE));
-    CHEEVJ_CHECK_ACLRT(aclrtMemset(deviceInfo, infoBytes, 0, infoBytes));
+        aclrtMemcpy(matrix.imag, sizes.matrixBytes, inputImag.data(), sizes.matrixBytes, ACL_MEMCPY_HOST_TO_DEVICE),
+        releaseWorkspaces());
+    CHEEVJ_CHECK_ACLRT(aclrtMemset(deviceInfo, infoBytes, 0, infoBytes), releaseWorkspaces());
 
     if (const aclError launchStatus = LaunchCompleteVector(matrix, panel, reflectorReal, reflectorImag, bounds,
                                                            eigenvalues, commandWorkspace, deviceInfo, n, stream);
         launchStatus != ACL_SUCCESS)
     {
+        releaseWorkspaces();
         return launchStatus;
     }
 
@@ -1240,12 +1272,13 @@ aclError RunCompleteVector(std::vector<Complex>* packedA, int64_t n, float* w, i
             CopyCompleteVectorOutput(deviceInfo, eigenvalues, matrix, sizes, packedA, n, w, info);
         copyStatus != ACL_SUCCESS)
     {
+        releaseWorkspaces();
         return copyStatus;
     }
 
-    CHEEVJ_CHECK_ACLRT(aclrtFree(matrixWorkspace));
-    CHEEVJ_CHECK_ACLRT(aclrtFree(auxiliaryWorkspace));
-    CHEEVJ_CHECK_ACLRT(aclrtFree(deviceInfo));
+    CHEEVJ_CHECK_ACLRT(aclrtFree(matrixWorkspace), releaseWorkspaces());
+    CHEEVJ_CHECK_ACLRT(aclrtFree(auxiliaryWorkspace), releaseWorkspaces());
+    CHEEVJ_CHECK_ACLRT(aclrtFree(deviceInfo), releaseWorkspaces());
     return ACL_SUCCESS;
 }
 
@@ -1293,9 +1326,8 @@ std::vector<int64_t> SortPaddedEigenpairs(const std::vector<float>& paddedW, int
     {
         eigenOrder[static_cast<size_t>(index)] = index;
     }
-    std::stable_sort(eigenOrder.begin(), eigenOrder.end(), [&paddedW](int64_t lhs, int64_t rhs) {
-        return paddedW[static_cast<size_t>(lhs)] < paddedW[static_cast<size_t>(rhs)];
-    });
+    std::stable_sort(eigenOrder.begin(), eigenOrder.end(), [&paddedW](int64_t lhs, int64_t rhs)
+                     { return paddedW[static_cast<size_t>(lhs)] < paddedW[static_cast<size_t>(rhs)]; });
     for (int64_t index = 0; index < n; ++index)
     {
         w[index] = paddedW[static_cast<size_t>(eigenOrder[static_cast<size_t>(index)])];
@@ -1303,8 +1335,8 @@ std::vector<int64_t> SortPaddedEigenpairs(const std::vector<float>& paddedW, int
     return eigenOrder;
 }
 
-std::vector<Complex> CropPaddedEigenvectors(const std::vector<Complex>& padded,
-                                            const std::vector<int64_t>& eigenOrder, int64_t n, int64_t paddedN)
+std::vector<Complex> CropPaddedEigenvectors(const std::vector<Complex>& padded, const std::vector<int64_t>& eigenOrder,
+                                            int64_t n, int64_t paddedN)
 {
     std::vector<Complex> cropped(static_cast<size_t>(n * n));
 #pragma omp parallel for if (n >= 256) num_threads(16) schedule(static)
@@ -1389,8 +1421,8 @@ struct GenericWorkspaceConfig
 };
 
 aclError ValidateCheevjArguments(aclsolverEigMode_t jobz, aclsolverFillMode_t uplo, int64_t n, const Complex* a,
-                                 int64_t lda, const float* w, int32_t* info, int32_t* jobzValue,
-                                 int32_t* uploValue, bool* computeVectors)
+                                 int64_t lda, const float* w, int32_t* info, int32_t* jobzValue, int32_t* uploValue,
+                                 bool* computeVectors)
 {
     if (info == nullptr)
     {
@@ -1400,11 +1432,9 @@ aclError ValidateCheevjArguments(aclsolverEigMode_t jobz, aclsolverFillMode_t up
     *jobzValue = static_cast<int32_t>(jobz);
     *uploValue = static_cast<int32_t>(uplo);
     *computeVectors = IsVectorMode(*jobzValue);
-    SOLVER_ECHECK(IsNoVectorMode(*jobzValue) || *computeVectors,
-                  "Cheevj jobz must be NOVECTOR/VECTOR or 'N'/'V'.",
+    SOLVER_ECHECK(IsNoVectorMode(*jobzValue) || *computeVectors, "Cheevj jobz must be NOVECTOR/VECTOR or 'N'/'V'.",
                   InvalidParam(info, -2, "jobz must be NOVECTOR/VECTOR or 'N'/'V'"));
-    SOLVER_ECHECK(IsLowerMode(*uploValue) || IsUpperMode(*uploValue),
-                  "Cheevj uplo must be LOWER/UPPER or 'L'/'U'.",
+    SOLVER_ECHECK(IsLowerMode(*uploValue) || IsUpperMode(*uploValue), "Cheevj uplo must be LOWER/UPPER or 'L'/'U'.",
                   InvalidParam(info, -3, "uplo must be LOWER/UPPER or 'L'/'U'"));
     SOLVER_ECHECK(n >= 0, "Cheevj get n < 0.", InvalidParam(info, -4, "n must be non-negative"));
     SOLVER_ECHECK(lda >= (n > 1 ? n : 1), "Cheevj get lda < max(1, n).",
@@ -1438,8 +1468,7 @@ uint32_t GetCheevjBlockCount()
     return numBlocks == 0 ? 1 : numBlocks;
 }
 
-DispatchResult TryStructuredInput(Complex* a, int64_t lda, int64_t n, int32_t uploValue, bool computeVectors,
-                                  float* w)
+DispatchResult TryStructuredInput(Complex* a, int64_t lda, int64_t n, int32_t uploValue, bool computeVectors, float* w)
 {
     const bool lower = IsLowerMode(uploValue);
     if (IsInputDiagonal(a, lda, n, lower))
@@ -1477,8 +1506,7 @@ DispatchResult TrySmallHostInput(Complex* a, int64_t lda, int64_t n, int32_t upl
     return {true, ACL_SUCCESS};
 }
 
-aclError BuildGenericWorkspaceConfig(int64_t n, bool computeVectors, int32_t* info,
-                                     GenericWorkspaceConfig* config)
+aclError BuildGenericWorkspaceConfig(int64_t n, bool computeVectors, int32_t* info, GenericWorkspaceConfig* config)
 {
     SOLVER_ECHECK(n <= std::numeric_limits<int32_t>::max(), "Cheevj n exceeds the device index representation.",
                   InvalidParam(info, -4, "n exceeds the device index representation"));
@@ -1492,18 +1520,33 @@ aclError BuildGenericWorkspaceConfig(int64_t n, bool computeVectors, int32_t* in
     config->strideN = AlignUp(n, COL_ALIGNED_ELENUM);
     config->workM = AlignUp(n, BASE_BLOCK_ELENUM);
     config->workspacePlanes = computeVectors ? CHEEVJ_WORKSPACE_PLANES_V : CHEEVJ_WORKSPACE_PLANES_N;
-    const int64_t maxStrideN =
-        config->workM > 0 ? std::numeric_limits<int32_t>::max() / config->workM : 0;
+    const int64_t maxStrideN = config->workM > 0 ? std::numeric_limits<int32_t>::max() / config->workM : 0;
     SOLVER_ECHECK(config->workM > 0 && config->strideN <= maxStrideN,
                   "Cheevj workspace plane exceeds the device index representation.",
                   InvalidParam(info, -4, "workspace plane exceeds the device index representation"));
     const size_t planeElems = static_cast<size_t>(config->strideN) * static_cast<size_t>(config->workM);
-    SOLVER_ECHECK(planeElems <= std::numeric_limits<size_t>::max() /
-                                       static_cast<size_t>(config->workspacePlanes) / sizeof(float),
-                  "Cheevj workspace byte size overflows size_t.",
-                  InvalidParam(info, -4, "workspace byte size overflows size_t"));
+    SOLVER_ECHECK(
+        planeElems <= std::numeric_limits<size_t>::max() / static_cast<size_t>(config->workspacePlanes) / sizeof(float),
+        "Cheevj workspace byte size overflows size_t.", InvalidParam(info, -4, "workspace byte size overflows size_t"));
     config->workspaceSize = planeElems * static_cast<size_t>(config->workspacePlanes) * sizeof(float);
     return ACL_SUCCESS;
+}
+
+// Estimate whether the pure-host fallback paths can hold the packed n*n
+// complex matrix.  Returns false (and records the reason in info) when the
+// request is beyond what the process can reasonably allocate, so callers get
+// an error code instead of an escaping std::bad_alloc (issue #122).
+bool HostFallbackFeasible(int64_t n, int32_t* info)
+{
+    constexpr double kMaxHostMatrixGiB = 8.0;
+    const double requestedGiB =
+        static_cast<double>(n) * static_cast<double>(n) * sizeof(Complex) / (1024.0 * 1024.0 * 1024.0);
+    if (requestedGiB > kMaxHostMatrixGiB)
+    {
+        InvalidParam(info, -5, "host fallback matrix exceeds the supported host memory budget");
+        return false;
+    }
+    return true;
 }
 
 DispatchResult TryWideScaleInput(Complex* a, int64_t lda, int64_t n, int32_t uploValue, bool computeVectors,
@@ -1512,6 +1555,10 @@ DispatchResult TryWideScaleInput(Complex* a, int64_t lda, int64_t n, int32_t upl
     if (!wideDiagonalScale || n <= 256)
     {
         return {false, ACL_SUCCESS};
+    }
+    if (!HostFallbackFeasible(n, info))
+    {
+        return {true, ACL_ERROR_INVALID_PARAM};
     }
     std::vector<Complex> hostMatrix;
     PackFullMatrix(a, lda, n, uploValue, &hostMatrix);
@@ -1547,6 +1594,13 @@ DispatchResult TryPackedSpecialCases(std::vector<Complex>* packedA, Complex* a, 
     }
     if (n > CHEEVJ_FIXED_N2048 || n <= 129)
     {
+        // n > 2048 falls back to a pure-host solver; guard the host-side
+        // allocation before packing so oversized inputs return an error code
+        // instead of throwing std::bad_alloc through the C boundary (#122).
+        if (n > CHEEVJ_FIXED_N2048 && !HostFallbackFeasible(n, info))
+        {
+            return {true, ACL_ERROR_INVALID_PARAM};
+        }
         const bool converged = SolveCompactHostHouseholder(packedA, n, computeVectors, w);
         if (computeVectors && (n <= 129 || converged))
         {
@@ -1643,38 +1697,76 @@ aclError RunGenericDevice(std::vector<Complex>* packedA, Complex* a, int64_t lda
     uint8_t* d_info = nullptr;
     uint8_t* workSpace = nullptr;
     uint8_t* tilingDevice = nullptr;
-    CHEEVJ_CHECK_ACLRT(aclrtMalloc((void**)&d_A, deviceSizeA, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHEEVJ_CHECK_ACLRT(aclrtMalloc((void**)&d_W, config.sizeW, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHEEVJ_CHECK_ACLRT(aclrtMalloc((void**)&d_info, config.sizeInfo, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHEEVJ_CHECK_ACLRT(aclrtMalloc((void**)&workSpace, config.workspaceSize, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHEEVJ_CHECK_ACLRT(aclrtMalloc((void**)&tilingDevice, sizeof(CheevjTilingData), ACL_MEM_MALLOC_HUGE_FIRST));
-    CHEEVJ_CHECK_ACLRT(
-        aclrtMemcpy(d_A, deviceSizeA, deviceA.data(), deviceSizeA, ACL_MEMCPY_HOST_TO_DEVICE));
-    CHEEVJ_CHECK_ACLRT(aclrtMemcpy(d_info, config.sizeInfo, info, config.sizeInfo, ACL_MEMCPY_HOST_TO_DEVICE));
+    // Release every device buffer acquired before a later runtime call fails;
+    // previously any memcpy/memset/synchronize failure returned without
+    // freeing the five allocations above (issue #121).
+    auto releaseDeviceBuffers = [&]()
+    {
+        if (d_A != nullptr)
+        {
+            (void)aclrtFree(d_A);
+            d_A = nullptr;
+        }
+        if (d_W != nullptr)
+        {
+            (void)aclrtFree(d_W);
+            d_W = nullptr;
+        }
+        if (d_info != nullptr)
+        {
+            (void)aclrtFree(d_info);
+            d_info = nullptr;
+        }
+        if (workSpace != nullptr)
+        {
+            (void)aclrtFree(workSpace);
+            workSpace = nullptr;
+        }
+        if (tilingDevice != nullptr)
+        {
+            (void)aclrtFree(tilingDevice);
+            tilingDevice = nullptr;
+        }
+    };
+    CHEEVJ_CHECK_ACLRT(aclrtMalloc((void**)&d_A, deviceSizeA, ACL_MEM_MALLOC_HUGE_FIRST), releaseDeviceBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtMalloc((void**)&d_W, config.sizeW, ACL_MEM_MALLOC_HUGE_FIRST), releaseDeviceBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtMalloc((void**)&d_info, config.sizeInfo, ACL_MEM_MALLOC_HUGE_FIRST),
+                       releaseDeviceBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtMalloc((void**)&workSpace, config.workspaceSize, ACL_MEM_MALLOC_HUGE_FIRST),
+                       releaseDeviceBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtMalloc((void**)&tilingDevice, sizeof(CheevjTilingData), ACL_MEM_MALLOC_HUGE_FIRST),
+                       releaseDeviceBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtMemcpy(d_A, deviceSizeA, deviceA.data(), deviceSizeA, ACL_MEMCPY_HOST_TO_DEVICE),
+                       releaseDeviceBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtMemcpy(d_info, config.sizeInfo, info, config.sizeInfo, ACL_MEMCPY_HOST_TO_DEVICE),
+                       releaseDeviceBuffers());
     CHEEVJ_CHECK_ACLRT(aclrtMemcpy(tilingDevice, sizeof(CheevjTilingData), &tilingData, sizeof(CheevjTilingData),
-                                   ACL_MEMCPY_HOST_TO_DEVICE));
-    CHEEVJ_CHECK_ACLRT(aclrtMemset(workSpace, config.workspaceSize, 0, config.workspaceSize));
+                                   ACL_MEMCPY_HOST_TO_DEVICE),
+                       releaseDeviceBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtMemset(workSpace, config.workspaceSize, 0, config.workspaceSize), releaseDeviceBuffers());
     uint8_t* sync = nullptr;
-    CHEEVJ_CHECK_ACLRT(aclrtGetHardwareSyncAddr((void**)&sync));
+    CHEEVJ_CHECK_ACLRT(aclrtGetHardwareSyncAddr((void**)&sync), releaseDeviceBuffers());
     cheevj_kernel_do(sync, d_A, d_W, d_info, workSpace, tilingDevice, numBlocks, stream);
-    CHEEVJ_CHECK_ACLRT(aclrtSynchronizeStream(stream));
-    CHEEVJ_CHECK_ACLRT(aclrtMemcpy(info, config.sizeInfo, d_info, config.sizeInfo, ACL_MEMCPY_DEVICE_TO_HOST));
+    CHEEVJ_CHECK_ACLRT(aclrtSynchronizeStream(stream), releaseDeviceBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtMemcpy(info, config.sizeInfo, d_info, config.sizeInfo, ACL_MEMCPY_DEVICE_TO_HOST),
+                       releaseDeviceBuffers());
     if (*info == 0)
     {
-        CHEEVJ_CHECK_ACLRT(aclrtMemcpy(w, config.sizeW, d_W, config.sizeW, ACL_MEMCPY_DEVICE_TO_HOST));
+        CHEEVJ_CHECK_ACLRT(aclrtMemcpy(w, config.sizeW, d_W, config.sizeW, ACL_MEMCPY_DEVICE_TO_HOST),
+                           releaseDeviceBuffers());
         if (computeVectors)
         {
-            CHEEVJ_CHECK_ACLRT(
-                aclrtMemcpy(deviceA.data(), deviceSizeA, d_A, deviceSizeA, ACL_MEMCPY_DEVICE_TO_HOST));
+            CHEEVJ_CHECK_ACLRT(aclrtMemcpy(deviceA.data(), deviceSizeA, d_A, deviceSizeA, ACL_MEMCPY_DEVICE_TO_HOST),
+                               releaseDeviceBuffers());
             CopyGenericDeviceVectors(deviceA, deviceLda, n, packedA);
             ScatterFullMatrix(*packedA, lda, n, a);
         }
     }
-    CHEEVJ_CHECK_ACLRT(aclrtFree(d_A));
-    CHEEVJ_CHECK_ACLRT(aclrtFree(d_W));
-    CHEEVJ_CHECK_ACLRT(aclrtFree(d_info));
-    CHEEVJ_CHECK_ACLRT(aclrtFree(workSpace));
-    CHEEVJ_CHECK_ACLRT(aclrtFree(tilingDevice));
+    CHEEVJ_CHECK_ACLRT(aclrtFree(d_A), releaseDeviceBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtFree(d_W), releaseDeviceBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtFree(d_info), releaseDeviceBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtFree(workSpace), releaseDeviceBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtFree(tilingDevice), releaseDeviceBuffers());
     return ACL_SUCCESS;
 }
 
@@ -1700,24 +1792,11 @@ aclError RunPackedOrGeneric(Complex* a, int64_t lda, int64_t n, int32_t jobzValu
                             config);
 }
 
-}  // namespace
-
-aclError aclsolverCheevj(aclsolverHandle_t handle, aclsolverEigMode_t jobz, aclsolverFillMode_t uplo, const int64_t n,
-                         Complex* a, const int64_t lda, float* w, int32_t* info)
+// Dispatches after argument validation; declared here so the public entry can
+// wrap it in a try/catch while it stays inside the anonymous namespace.
+aclError CheevjDispatch(aclsolverHandle_t handle, int32_t jobzValue, int32_t uploValue, const int64_t n, Complex* a,
+                        const int64_t lda, float* w, int32_t* info, bool computeVectors)
 {
-    int32_t jobzValue = 0;
-    int32_t uploValue = 0;
-    bool computeVectors = false;
-    if (const aclError validationStatus =
-            ValidateCheevjArguments(jobz, uplo, n, a, lda, w, info, &jobzValue, &uploValue, &computeVectors);
-        validationStatus != ACL_SUCCESS)
-    {
-        return validationStatus;
-    }
-    if (n == 0)
-    {
-        return ACL_SUCCESS;
-    }
     const aclrtStream stream = GetCheevjStream(handle);
     const uint32_t numBlocks = GetCheevjBlockCount();
 
@@ -1756,4 +1835,43 @@ aclError aclsolverCheevj(aclsolverHandle_t handle, aclsolverEigMode_t jobz, acls
     }
 
     return RunPackedOrGeneric(a, lda, n, jobzValue, uploValue, computeVectors, w, info, numBlocks, stream, config);
+}
+
+}  // namespace
+
+aclError aclsolverCheevj(aclsolverHandle_t handle, aclsolverEigMode_t jobz, aclsolverFillMode_t uplo, const int64_t n,
+                         Complex* a, const int64_t lda, float* w, int32_t* info)
+{
+    int32_t jobzValue = 0;
+    int32_t uploValue = 0;
+    bool computeVectors = false;
+    if (const aclError validationStatus =
+            ValidateCheevjArguments(jobz, uplo, n, a, lda, w, info, &jobzValue, &uploValue, &computeVectors);
+        validationStatus != ACL_SUCCESS)
+    {
+        return validationStatus;
+    }
+    if (n == 0)
+    {
+        return ACL_SUCCESS;
+    }
+    // The pure-host fallback paths allocate n*n matrices on the stack of this
+    // call; translate any allocation failure into an error code so C callers
+    // never observe an escaping std::bad_alloc (issue #122).
+    try
+    {
+        return CheevjDispatch(handle, jobzValue, uploValue, n, a, lda, w, info, computeVectors);
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::cerr << "Cheevj host allocation failed for n=" << n << std::endl;
+        InvalidParam(info, -5, "host allocation failed");
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Cheevj unexpected host failure: " << e.what() << std::endl;
+        InvalidParam(info, -6, "unexpected host failure");
+        return ACL_ERROR_INTERNAL_ERROR;
+    }
 }

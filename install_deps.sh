@@ -18,15 +18,6 @@ run_command() {
     echo "Executing command: $cmd"
 
     if ! output=$("$@" 2>&1); then
-         local exit_code=$?
-         echo -e "\nCommand execution failed!"
-         echo -e "\nFailed command: $cmd"
-         echo -e "\nError output: $output"
-         echo -e "\nExit code: $exit_code"
-         exit $exit_code
-    if output=$("$@" 2>&1); then
-        :
-    else
         local exit_code=$?
         echo -e "\nCommand execution failed!"
         echo -e "\nFailed command: $cmd"

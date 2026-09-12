@@ -262,10 +262,11 @@ void UnpackComplexPlanes(const std::vector<float>& real, const std::vector<float
 
 aclError CopyFixedEigenvalues(uint8_t* deviceInfo, uint8_t* eigenvalues, size_t vectorBytes, float* w, int32_t* info)
 {
-    CHEEVJ_CHECK_ACLRT(aclrtMemcpy(info, sizeof(int32_t), deviceInfo, sizeof(int32_t), ACL_MEMCPY_DEVICE_TO_HOST));
+    CHEEVJ_CHECK_ACLRT(aclrtMemcpy(info, sizeof(int32_t), deviceInfo, sizeof(int32_t), ACL_MEMCPY_DEVICE_TO_HOST),
+                       ((void)0));
     if (*info == 0)
     {
-        CHEEVJ_CHECK_ACLRT(aclrtMemcpy(w, vectorBytes, eigenvalues, vectorBytes, ACL_MEMCPY_DEVICE_TO_HOST));
+        CHEEVJ_CHECK_ACLRT(aclrtMemcpy(w, vectorBytes, eigenvalues, vectorBytes, ACL_MEMCPY_DEVICE_TO_HOST), ((void)0));
     }
     return ACL_SUCCESS;
 }
@@ -276,9 +277,11 @@ aclError CopyFixedEigenvectors(const FixedMatrixSlices& matrix, const FixedWorks
     std::vector<float> outputReal(static_cast<size_t>(sizes.matrixElems));
     std::vector<float> outputImag(static_cast<size_t>(sizes.matrixElems));
     CHEEVJ_CHECK_ACLRT(
-        aclrtMemcpy(outputReal.data(), sizes.matrixBytes, matrix.imag, sizes.matrixBytes, ACL_MEMCPY_DEVICE_TO_HOST));
+        aclrtMemcpy(outputReal.data(), sizes.matrixBytes, matrix.imag, sizes.matrixBytes, ACL_MEMCPY_DEVICE_TO_HOST),
+        ((void)0));
     CHEEVJ_CHECK_ACLRT(aclrtMemcpy(outputImag.data(), sizes.matrixBytes, matrix.packedReal, sizes.matrixBytes,
-                                   ACL_MEMCPY_DEVICE_TO_HOST));
+                                   ACL_MEMCPY_DEVICE_TO_HOST),
+                       ((void)0));
     UnpackComplexPlanes(outputReal, outputImag, packedA, n);
     return ACL_SUCCESS;
 }
@@ -294,7 +297,7 @@ aclError LaunchCompleteVector(const FixedMatrixSlices& matrix, const FixedPanelS
                            reflectorImag, bounds, eigenvalues, matrix.packedImag, matrix.updateReal, matrix.real,
                            commandWorkspace, matrix.imag, matrix.packedReal, deviceInfo, static_cast<int>(n), true,
                            stream);
-    CHEEVJ_CHECK_ACLRT(aclrtSynchronizeStream(stream));
+    CHEEVJ_CHECK_ACLRT(aclrtSynchronizeStream(stream), ((void)0));
     return ACL_SUCCESS;
 }
 
@@ -317,15 +320,44 @@ aclError RunCompleteNoVector(const std::vector<Complex>& packedA, int64_t n, flo
     uint8_t* auxiliaryWorkspace = nullptr;
     uint8_t* eigenvalues = nullptr;
     uint8_t* deviceInfo = nullptr;
+    // Release all four device buffers on any allocation, memset, memcpy, or
+    // synchronize failure instead of returning with them still held (#121).
+    auto releaseFixedBuffers = [&]() {
+        if (matrixWorkspace != nullptr)
+        {
+            (void)aclrtFree(matrixWorkspace);
+            matrixWorkspace = nullptr;
+        }
+        if (auxiliaryWorkspace != nullptr)
+        {
+            (void)aclrtFree(auxiliaryWorkspace);
+            auxiliaryWorkspace = nullptr;
+        }
+        if (eigenvalues != nullptr)
+        {
+            (void)aclrtFree(eigenvalues);
+            eigenvalues = nullptr;
+        }
+        if (deviceInfo != nullptr)
+        {
+            (void)aclrtFree(deviceInfo);
+            deviceInfo = nullptr;
+        }
+    };
     CHEEVJ_CHECK_ACLRT(
-        aclrtMalloc(reinterpret_cast<void**>(&matrixWorkspace), sizes.sixPlaneBytes, ACL_MEM_MALLOC_HUGE_FIRST));
+        aclrtMalloc(reinterpret_cast<void**>(&matrixWorkspace), sizes.sixPlaneBytes, ACL_MEM_MALLOC_HUGE_FIRST),
+        releaseFixedBuffers());
     CHEEVJ_CHECK_ACLRT(
-        aclrtMalloc(reinterpret_cast<void**>(&auxiliaryWorkspace), auxiliaryBytes, ACL_MEM_MALLOC_HUGE_FIRST));
+        aclrtMalloc(reinterpret_cast<void**>(&auxiliaryWorkspace), auxiliaryBytes, ACL_MEM_MALLOC_HUGE_FIRST),
+        releaseFixedBuffers());
     CHEEVJ_CHECK_ACLRT(
-        aclrtMalloc(reinterpret_cast<void**>(&eigenvalues), sizes.vectorBytes, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHEEVJ_CHECK_ACLRT(aclrtMalloc(reinterpret_cast<void**>(&deviceInfo), sizeof(int32_t), ACL_MEM_MALLOC_HUGE_FIRST));
-    CHEEVJ_CHECK_ACLRT(aclrtMemset(matrixWorkspace, sizes.sixPlaneBytes, 0, sizes.sixPlaneBytes));
-    CHEEVJ_CHECK_ACLRT(aclrtMemset(auxiliaryWorkspace, auxiliaryBytes, 0, auxiliaryBytes));
+        aclrtMalloc(reinterpret_cast<void**>(&eigenvalues), sizes.vectorBytes, ACL_MEM_MALLOC_HUGE_FIRST),
+        releaseFixedBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtMalloc(reinterpret_cast<void**>(&deviceInfo), sizeof(int32_t), ACL_MEM_MALLOC_HUGE_FIRST),
+                       releaseFixedBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtMemset(matrixWorkspace, sizes.sixPlaneBytes, 0, sizes.sixPlaneBytes),
+                       releaseFixedBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtMemset(auxiliaryWorkspace, auxiliaryBytes, 0, auxiliaryBytes), releaseFixedBuffers());
 
     const FixedMatrixSlices matrix = TakeFixedMatrixSlices(matrixWorkspace, sizes.matrixBytes);
     const FixedPanelSlices panel = TakeFixedPanelSlices(auxiliaryWorkspace, sizes);
@@ -335,10 +367,13 @@ aclError RunCompleteNoVector(const std::vector<Complex>& packedA, int64_t n, flo
     uint8_t* highWorkspace = TakeWorkspaceSlice(auxiliaryWorkspace, &auxiliaryOffset, sizes.vectorBytes);
 
     CHEEVJ_CHECK_ACLRT(
-        aclrtMemcpy(matrix.real, sizes.matrixBytes, matrixReal.data(), sizes.matrixBytes, ACL_MEMCPY_HOST_TO_DEVICE));
+        aclrtMemcpy(matrix.real, sizes.matrixBytes, matrixReal.data(), sizes.matrixBytes, ACL_MEMCPY_HOST_TO_DEVICE),
+        releaseFixedBuffers());
     CHEEVJ_CHECK_ACLRT(
-        aclrtMemcpy(matrix.imag, sizes.matrixBytes, matrixImag.data(), sizes.matrixBytes, ACL_MEMCPY_HOST_TO_DEVICE));
-    CHEEVJ_CHECK_ACLRT(aclrtMemcpy(deviceInfo, sizeof(int32_t), info, sizeof(int32_t), ACL_MEMCPY_HOST_TO_DEVICE));
+        aclrtMemcpy(matrix.imag, sizes.matrixBytes, matrixImag.data(), sizes.matrixBytes, ACL_MEMCPY_HOST_TO_DEVICE),
+        releaseFixedBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtMemcpy(deviceInfo, sizeof(int32_t), info, sizeof(int32_t), ACL_MEMCPY_HOST_TO_DEVICE),
+                       releaseFixedBuffers());
 
     // All numeric stages are enqueued through one fixed-shape dispatcher.
     // The stage launches remain separate because AIV, AIC, and global
@@ -349,17 +384,18 @@ aclError RunCompleteNoVector(const std::vector<Complex>& packedA, int64_t n, flo
                            panel.tauReal, panel.tauImag, panel.panelWorkspace, panel.barrierWorkspace, nullptr, nullptr,
                            bounds, eigenvalues, lowWorkspace, highWorkspace, nullptr, nullptr, nullptr, nullptr,
                            deviceInfo, static_cast<int>(n), false, stream);
-    CHEEVJ_CHECK_ACLRT(aclrtSynchronizeStream(stream));
+    CHEEVJ_CHECK_ACLRT(aclrtSynchronizeStream(stream), releaseFixedBuffers());
 
     const aclError copyStatus = CopyFixedEigenvalues(deviceInfo, eigenvalues, sizes.vectorBytes, w, info);
     if (copyStatus != ACL_SUCCESS)
     {
+        releaseFixedBuffers();
         return copyStatus;
     }
 
-    CHEEVJ_CHECK_ACLRT(aclrtFree(matrixWorkspace));
-    CHEEVJ_CHECK_ACLRT(aclrtFree(auxiliaryWorkspace));
-    CHEEVJ_CHECK_ACLRT(aclrtFree(eigenvalues));
-    CHEEVJ_CHECK_ACLRT(aclrtFree(deviceInfo));
+    CHEEVJ_CHECK_ACLRT(aclrtFree(matrixWorkspace), releaseFixedBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtFree(auxiliaryWorkspace), releaseFixedBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtFree(eigenvalues), releaseFixedBuffers());
+    CHEEVJ_CHECK_ACLRT(aclrtFree(deviceInfo), releaseFixedBuffers());
     return ACL_SUCCESS;
 }

@@ -16,6 +16,7 @@ import numpy as np
 eps = 1e-3
 error_tol = 1e-4
 
+
 def gemm(a):
     """矩阵乘法,用于验证 LU 分解结果"""
     m, n = a.shape
@@ -29,9 +30,11 @@ def gemm(a):
                     b[i, j] += a[i, k] * a[k, j]
     return b
 
+
 def l1norm(a):
     """计算矩阵的 L1 范数"""
     return np.max(np.sum(np.abs(a), axis=0))
+
 
 def main():
     m = int(sys.argv[1]) if len(sys.argv) > 1 else 32
@@ -39,8 +42,12 @@ def main():
     t = min(m, n)
 
     # 读取输入文件
-    a = np.fromfile("./test/cgetrf/data/input/A_gm.bin", dtype=np.complex64).reshape(m, n)
-    x = np.fromfile("./test/cgetrf/data/output/A_gm.bin", dtype=np.complex64).reshape(m, n)
+    a = np.fromfile("./test/cgetrf/data/input/A_gm.bin", dtype=np.complex64).reshape(
+        m, n
+    )
+    x = np.fromfile("./test/cgetrf/data/output/A_gm.bin", dtype=np.complex64).reshape(
+        m, n
+    )
     w = np.fromfile("./test/cgetrf/data/output/W_gm.bin", dtype=np.uint32).reshape(t)
 
     # 根据 pivot 数组进行行交换
@@ -58,18 +65,25 @@ def main():
     for j in range(n):
         for i in range(m):
             ratio = np.abs(a[i, j] - b[i, j]) / np.abs(a[i, j])
-            if (ratio > eps or
-                np.isnan(b[i, j].real) or np.isnan(b[i, j].imag) or
-                np.isinf(b[i, j].real) or np.isinf(b[i, j].imag)):
+            if (
+                ratio > eps
+                or np.isnan(b[i, j].real)
+                or np.isnan(b[i, j].imag)
+                or np.isinf(b[i, j].real)
+                or np.isinf(b[i, j].imag)
+            ):
                 cnt += 1
                 if cnt <= 32:
-                    print(f"index: {i}, {j}, golden: {a[i, j].real:.4f}, {a[i, j].imag:.4f}, "
-                          f"actual: {b[i, j].real:.4f}, {b[i, j].imag:.4f}, ratio: {ratio:.4f}")
+                    print(
+                        f"index: {i}, {j}, golden: {a[i, j].real:.4f}, {a[i, j].imag:.4f}, "
+                        f"actual: {b[i, j].real:.4f}, {b[i, j].imag:.4f}, ratio: {ratio:.4f}"
+                    )
 
     print(f"Wrong Indices: {cnt}, ratio: {cnt / (m * n):.4f}")
     print(f"l1norm diff: {l1norm(a - b) / l1norm(a):.8f}")
 
     return cnt / (m * n) <= error_tol
+
 
 if __name__ == "__main__":
     try:
@@ -78,7 +92,7 @@ if __name__ == "__main__":
             print("[Failed] Case accuracy verification failed.")
             sys.exit(1)
         else:
-            print("[Success] Case accuracy is verification passed.")
+            print("[Success] Case accuracy verification passed.")
             sys.exit(0)
     except Exception as e:
         print(e)

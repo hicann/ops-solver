@@ -20,7 +20,7 @@ Solver CmatinvBatched算子实现。
 
 ## 算子描述
 
-- 算子功能：  
+- 算子功能：
     CmatinvBatched算子计算批量复数矩阵的逆矩阵，对应的数学表达式为：
     $$A^{-1}A = I$$
     其中$A$为$n \times n$阶非奇异复数方阵，$I$为$n$阶单位矩阵。
@@ -97,18 +97,18 @@ Solver CmatinvBatched算子实现。
     </table>
 
 
-- 算子约束： 
+- 算子约束：
   - lda、lda_inv、info参数在当前版本实际未启用。
   - 入参n小于等于256。
   - 入参batchSize小于等于3000。
 
-- 调用实现  
+- 调用实现
     使用内核调用符<<<>>>调用核函数。
 
 ## 编译运行
 
 在本样例根目录下执行如下步骤，编译并执行算子。
-- 配置环境变量  
+- 配置环境变量
   请根据当前环境上CANN开发套件包的安装方式，选择对应配置环境变量的命令。
   - 默认路径，root用户安装CANN软件包
     ```bash
@@ -131,5 +131,5 @@ Solver CmatinvBatched算子实现。
   ```
   执行结果如下，说明精度对比成功。
   ```bash
-  [Success] Case accuracy is verification passed.
+  [Success] Case accuracy verification passed.
   ```
