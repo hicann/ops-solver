@@ -17,45 +17,17 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <iostream>
-#include <iterator>
-#include <vector>
 
 #include "../utils/assert.h"
+#include "../utils/gm_addr.h"
+#include "../utils/lu_host_common.h"
 #include "acl/acl.h"
 #include "cann_ops_solver.h"
 #include "tiling/platform/platform_ascendc.h"
 
-#define GM_ADDR uint8_t *
-
 extern void sgetrf_kernel_do(GM_ADDR sync, int orgM, int orgN, int blockN, int tileM, GM_ADDR A_org, GM_ADDR A_work,
                              GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm, uint32_t numBlocks,
                              void *stream);
-
-bool GenerateGather(int blockM, int blockN, int64_t M, int64_t N, uint8_t *gatherBuf1, uint8_t *gatherBuf2)
-{
-    try
-    {
-        {
-            auto buf = reinterpret_cast<uint32_t *>(gatherBuf1);
-            int idx = 0;
-            for (int j = 0; j < blockN; ++j)
-                for (int i = blockM - 1; i >= 0; --i) buf[idx++] = (i * blockN + j) * sizeof(float);
-        }
-        {
-            auto buf = reinterpret_cast<uint32_t *>(gatherBuf2);
-            int idx = 0;
-            for (int i = blockM - 1; i >= 0; --i)
-                for (int j = 0; j < blockN; ++j) buf[idx++] = (j * blockM + i) * sizeof(float);
-        }
-    }
-    catch (const std::exception &e)
-    {
-        std::cout << e.what() << std::endl;
-        return false;
-    }
-    return true;
-}
 
 aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_t n, float *A, const int64_t lda,
                          int32_t *ipiv, int32_t *info)
@@ -76,25 +48,17 @@ aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
     {
         aclsolverGetStream(handle, &stream);
     }
-    auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
     // kernel hardcoded gemm1BlockNum=8, gemm2BlockNum=20-8, must use 20 blocks
-    uint32_t numBlocks = 20;
+    const uint32_t numBlocks = LU_MAX_NUM_BLOCKS;
 
-    int M, N, blockDim, blockN, blockM, tileM;
-    M = m;
-    N = n;
-    blockDim = numBlocks;
+    const int64_t blockN = LU_BLOCK_N;
+    const int64_t tileM = LU_TILE_M;
+    // 尺寸推导统一在 int64_t 域计算，避免 m/n 较大时 int 乘加溢出导致缓冲尺寸回绕
+    int64_t t = (std::min(m, n) + blockN - 1) / blockN * blockN;
+    int64_t alignedM = LuAlignUp(m, LU_ROW_ALIGNED);
+    int64_t strideN = LuAlignUp(n, LU_COL_ALIGNED);
 
-    blockN = 16;
-    blockM = 16;
-    tileM = 512;
-    // 尺寸推导统一在 int64_t 域计算，避免 M/N 较大时 int 乘加溢出导致缓冲尺寸回绕
-    int64_t t = (static_cast<int64_t>(std::min(M, N)) + blockN - 1) / blockN * blockN;
-    int64_t alignedM = (static_cast<int64_t>(M) + 15) / 16 * 16;
-    int64_t alignedN = (static_cast<int64_t>(N) + 15) / 16 * 16;
-    int64_t strideN = (static_cast<int64_t>(N) + 127) / 128 * 128;
-
-    size_t aMatrixFileSize = static_cast<int64_t>(M) * N * sizeof(float);
+    size_t aMatrixFileSize = static_cast<size_t>(m) * n * sizeof(float);
     size_t wFileSize = t * sizeof(int);
 
     uint8_t *aMatrixHost = reinterpret_cast<uint8_t *>(A);
@@ -131,7 +95,7 @@ aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
     CHECK_ACLRT(aclrtMalloc((void **)&wDevice, wFileSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
     CHECK_ACLRT(aclrtMemset(wDevice, wFileSize, -1, wFileSize), cleanup());
 
-    int64_t workM = (static_cast<int64_t>(M) + tileM - 1) / tileM * tileM;
+    int64_t workM = LuAlignUp(m, LU_TILE_M);
     size_t workSize = static_cast<size_t>(workM) * blockN * sizeof(float);
     CHECK_ACLRT(aclrtMalloc((void **)&workDevice, workSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
 
@@ -141,7 +105,9 @@ aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
     CHECK_ACLRT(aclrtMalloc((void **)&gatherDevice1, gatherSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
     CHECK_ACLRT(aclrtMalloc((void **)&gatherDevice2, gatherSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
 
-    if (!GenerateGather(tileM, blockN, alignedM, alignedN, gatherHost1, gatherHost2))
+    // gather1/gather2 重排表收敛为 utils 共享实现（issue #144）
+    if (!GenerateGatherTables(tileM, blockN, n, strideN, alignedM, gatherHost1, gatherHost2, nullptr, nullptr,
+                              EYE_FLOATS_PER_REAL_ELEMENT))
     {
         cleanup();
         return ACL_ERROR_INTERNAL_ERROR;
@@ -153,8 +119,8 @@ aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
 
     CHECK_ACLRT(aclrtGetHardwareSyncAddr((void **)&sync), cleanup());
 
-    sgetrf_kernel_do(sync, M, N, blockN, tileM, aMatrixDevice, aMatrixDeviceWork, wDevice, workDevice, gatherDevice1,
-                     gatherDevice2, blockDim, stream);
+    sgetrf_kernel_do(sync, m, n, blockN, tileM, aMatrixDevice, aMatrixDeviceWork, wDevice, workDevice, gatherDevice1,
+                     gatherDevice2, numBlocks, stream);
     CHECK_ACLRT(aclrtSynchronizeStream(stream), cleanup());
 
     CHECK_ACLRT(aclrtMemcpy(aMatrixHost, aMatrixFileSize, aMatrixDevice, aMatrixFileSize, ACL_MEMCPY_DEVICE_TO_HOST),
@@ -163,7 +129,7 @@ aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
     // Copy pivot information back to ipiv
     int32_t *wHostInt = reinterpret_cast<int32_t *>(wHost);
     CHECK_ACLRT(aclrtMemcpy(wHost, wFileSize, wDevice, wFileSize, ACL_MEMCPY_DEVICE_TO_HOST), cleanup());
-    for (int i = 0; i < std::min(M, N); ++i)
+    for (int64_t i = 0; i < std::min(m, n); ++i)
     {
         ipiv[i] = wHostInt[i] + 1;  // Convert to 1-based indexing
     }

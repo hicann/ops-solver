@@ -30,8 +30,6 @@
 #include "cheevj_launchers.hpp"
 #include "tiling/platform/platform_ascendc.h"
 
-#define GM_ADDR uint8_t*
-
 // Keep Cheevj independent of the repository-wide CHECK_ACLRT macro shape.
 // The upstream helper gained a caller-supplied cleanup argument after this
 // implementation was developed; a private wrapper avoids changing the error
@@ -1152,6 +1150,7 @@ void ApplyAdjointToProbes(const std::vector<Complex>& vectors, const std::vector
     }
 }
 
+#include "../utils/gm_addr.h"
 #include "cheevj_fixed_host.inc"
 
 aclError CopyCompleteVectorOutput(uint8_t* deviceInfo, uint8_t* eigenvalues, const FixedMatrixSlices& matrix,
@@ -1834,6 +1833,11 @@ aclError CheevjDispatch(aclsolverHandle_t handle, int32_t jobzValue, int32_t upl
         return RunPaddedFixed(a, lda, n, paddedN, uploValue, computeVectors, w, info, stream);
     }
 
+    // 注意：当前分发顺序下 RunPackedOrGeneric 内部的 RunGenericDevice（通用形状设备内核，
+    // cheevj_kernel.cpp 整条链路）对任何输入均不可达——n<=129 或 n>2048 已被 TryPackedSpecialCases
+    // 以主机求解处理，512/1024/2048 被 TryFixedShape 处理，[130,2048] 非固定形状在上方 RunPaddedFixed
+    // 返回。该链路保留作为后续启用 generic 内核的既有实现：启用时需调整上方 RunPaddedFixed 的
+    // 分发条件（如仅对特定 n 区间 padding），并回归 cheevj_kernel 的 tiling/workspace 约定（issue #138）
     return RunPackedOrGeneric(a, lda, n, jobzValue, uploValue, computeVectors, w, info, numBlocks, stream, config);
 }
 

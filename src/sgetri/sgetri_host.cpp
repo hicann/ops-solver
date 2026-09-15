@@ -17,50 +17,20 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <iostream>
-#include <iterator>
-#include <vector>
 
 #include "../utils/assert.h"
 #include "../utils/eye_matrix.h"
+#include "../utils/gm_addr.h"
+#include "../utils/lu_host_common.h"
 #include "acl/acl.h"
 #include "cann_ops_solver.h"
 #include "tiling/platform/platform_ascendc.h"
 
-#define GM_ADDR uint8_t *
-
 extern void sgetri_kernel_do(GM_ADDR sync, int orgM, int orgN, int blockM, int blockN, int tileM, GM_ADDR A_org,
                              GM_ADDR A_work, GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm,
                              GM_ADDR eye_gm, uint32_t numBlocks, void *stream);
-bool GenerateTiling(int blockM, int blockN, int64_t N, int64_t strideN, uint8_t *gatherBuf1, uint8_t *gatherBuf2,
-                    uint8_t *eyeBuf)
-{
-    try
-    {
-        {
-            auto buf = reinterpret_cast<uint32_t *>(gatherBuf1);
-            int idx = 0;
-            for (int j = 0; j < blockN; ++j)
-                for (int i = blockM - 1; i >= 0; --i) buf[idx++] = (i * blockN + j) * sizeof(float);
-        }
-        {
-            auto buf = reinterpret_cast<uint32_t *>(gatherBuf2);
-            int idx = 0;
-            for (int i = blockM - 1; i >= 0; --i)
-                for (int j = 0; j < blockN; ++j) buf[idx++] = (j * blockM + i) * sizeof(float);
-        }
-        if (!GenerateEyeMatrix(N, strideN, eyeBuf, EYE_FLOATS_PER_REAL_ELEMENT))
-        {
-            return false;
-        }
-    }
-    catch (const std::exception &e)
-    {
-        std::cout << e.what() << std::endl;
-        return false;
-    }
-    return true;
-}
+// gather 表与 eye 矩阵生成收敛为 utils 共享实现（issue #144）；
+// eye 的初始化范围扩展到 paddedM 行，消除 +128 行 padding 区未初始化上设备（issue #136）
 
 aclError aclsolverSgetri(aclsolverHandle_t handle, const int64_t n, float *A, const int64_t lda, int32_t *info)
 {
@@ -79,7 +49,6 @@ aclError aclsolverSgetri(aclsolverHandle_t handle, const int64_t n, float *A, co
         aclsolverGetStream(handle, &stream);
     }
 
-    int32_t deviceId = 0;
     uint8_t *aMatrixDevice = nullptr;
     uint8_t *aMatrixDeviceWork = nullptr;
     uint8_t *wHost = nullptr;
@@ -106,7 +75,6 @@ aclError aclsolverSgetri(aclsolverHandle_t handle, const int64_t n, float *A, co
         if (gatherHost2) aclrtFreeHost(gatherHost2);
     };
 
-    CHECK_ACLRT(aclrtGetDevice(&deviceId), cleanup());
     auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
     uint32_t numBlocks = 0;
     if (ascendcPlatform != nullptr)
@@ -124,20 +92,17 @@ aclError aclsolverSgetri(aclsolverHandle_t handle, const int64_t n, float *A, co
         numBlocks = 1;
     }
 
-    int M, N, blockDim, blockN, blockM, tileM;
-    M = n;
-    N = n;
-    blockDim = numBlocks;
+    const int64_t blockM = LU_ROW_ALIGNED;
+    const int64_t blockN = LU_BLOCK_N;
+    const int64_t tileM = LU_TILE_M;
+    // 尺寸推导统一在 int64_t 域计算，避免 n 较大时 int 乘加溢出导致缓冲尺寸回绕
+    int64_t t = (n + blockN - 1) / blockN * blockN;
+    int64_t alignedM = LuAlignUp(n, LU_ROW_ALIGNED);
+    int64_t strideN = LuAlignUp(n, LU_COL_ALIGNED);
+    // eye/工作区按 (alignedM + 128 行 padding) 布局，padding 区需清零后上设备（issue #136）
+    const int64_t paddedM = alignedM + EYE_ROW_PADDING;
 
-    blockN = 16;
-    blockM = 16;
-    tileM = 512;
-    // 尺寸推导统一在 int64_t 域计算，避免 N 较大时 int 乘加溢出导致缓冲尺寸回绕
-    int64_t t = (static_cast<int64_t>(std::min(M, N)) + blockN - 1) / blockN * blockN;
-    int64_t alignedM = (static_cast<int64_t>(M) + 15) / 16 * 16;
-    int64_t strideN = (static_cast<int64_t>(N) + 127) / 128 * 128;
-
-    size_t aMatrixFileSize = static_cast<int64_t>(M) * N * sizeof(float);
+    size_t aMatrixFileSize = static_cast<size_t>(n) * n * sizeof(float);
     size_t wFileSize = t * sizeof(int);
 
     uint8_t *aMatrixHost = reinterpret_cast<uint8_t *>(A);
@@ -145,14 +110,14 @@ aclError aclsolverSgetri(aclsolverHandle_t handle, const int64_t n, float *A, co
     CHECK_ACLRT(aclrtMemcpy(aMatrixDevice, aMatrixFileSize, aMatrixHost, aMatrixFileSize, ACL_MEMCPY_HOST_TO_DEVICE),
                 cleanup());
 
-    size_t aMatrixWorkSize = static_cast<size_t>(strideN) * static_cast<size_t>(alignedM + 128) * sizeof(float);
+    size_t aMatrixWorkSize = static_cast<size_t>(strideN) * paddedM * sizeof(float);
     CHECK_ACLRT(aclrtMalloc((void **)&aMatrixDeviceWork, aMatrixWorkSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
 
     CHECK_ACLRT(aclrtMallocHost((void **)(&wHost), wFileSize), cleanup());
     CHECK_ACLRT(aclrtMalloc((void **)&wDevice, wFileSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
     CHECK_ACLRT(aclrtMemset(wDevice, wFileSize, -1, wFileSize), cleanup());
 
-    int64_t workM = (static_cast<int64_t>(M) + tileM - 1) / tileM * tileM;
+    int64_t workM = LuAlignUp(n, LU_TILE_M);
     size_t workSize = static_cast<size_t>(workM) * blockN * sizeof(float);
     CHECK_ACLRT(aclrtMalloc((void **)&workDevice, workSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
 
@@ -164,7 +129,8 @@ aclError aclsolverSgetri(aclsolverHandle_t handle, const int64_t n, float *A, co
     CHECK_ACLRT(aclrtMallocHost((void **)(&gatherHost2), gatherSize), cleanup());
     CHECK_ACLRT(aclrtMalloc((void **)&gatherDevice1, gatherSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
     CHECK_ACLRT(aclrtMalloc((void **)&gatherDevice2, gatherSize, ACL_MEM_MALLOC_HUGE_FIRST), cleanup());
-    if (!GenerateTiling(tileM, blockN, N, strideN, gatherHost1, gatherHost2, eyeMatrixHost))
+    if (!GenerateGatherTables(tileM, blockN, n, strideN, paddedM, gatherHost1, gatherHost2, nullptr, eyeMatrixHost,
+                              EYE_FLOATS_PER_REAL_ELEMENT))
     {
         cleanup();
         return ACL_ERROR_INTERNAL_ERROR;
@@ -179,8 +145,8 @@ aclError aclsolverSgetri(aclsolverHandle_t handle, const int64_t n, float *A, co
 
     CHECK_ACLRT(aclrtGetHardwareSyncAddr((void **)&sync), cleanup());
 
-    sgetri_kernel_do(sync, M, N, blockM, blockN, tileM, aMatrixDevice, aMatrixDeviceWork, wDevice, workDevice,
-                     gatherDevice1, gatherDevice2, eyeMatrixDevice, blockDim, stream);
+    sgetri_kernel_do(sync, n, n, blockM, blockN, tileM, aMatrixDevice, aMatrixDeviceWork, wDevice, workDevice,
+                     gatherDevice1, gatherDevice2, eyeMatrixDevice, numBlocks, stream);
     CHECK_ACLRT(aclrtSynchronizeStream(stream), cleanup());
 
     CHECK_ACLRT(aclrtMemcpy(aMatrixHost, aMatrixFileSize, aMatrixDevice, aMatrixFileSize, ACL_MEMCPY_DEVICE_TO_HOST),

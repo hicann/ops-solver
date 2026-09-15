@@ -23,11 +23,11 @@
 #include <vector>
 
 #include "../utils/assert.h"
+#include "../utils/gm_addr.h"
+#include "../utils/lu_host_common.h"
 #include "acl/acl.h"
 #include "cann_ops_solver.h"
 #include "tiling/platform/platform_ascendc.h"
-
-#define GM_ADDR uint8_t *
 
 extern void cgetri_batched_kernel_do(GM_ADDR sync, GM_ADDR A_org, GM_ADDR W, GM_ADDR gather1_gm, GM_ADDR gather2_gm,
                                      GM_ADDR gather3_gm, GM_ADDR eye_gm, GM_ADDR A_work, GM_ADDR work_gm, GM_ADDR A_inv,
@@ -71,6 +71,23 @@ aclError CgetriBatchedImpl(aclsolverHandle_t handle, const int64_t n, std::compl
 aclError aclsolverCgetriBatched(aclsolverHandle_t handle, const int64_t n, std::complex<float> *A, const int64_t lda,
                                 std::complex<float> *Ainv, const int64_t lda_inv, int32_t *info, int64_t batchSize)
 {
+    // 参数范围校验先于一切估算算术执行：体积估算的乘法仅在通过范围校验的 n/batchSize 上
+    // 运行，消除大 n（约 1.75e9 以上）下 int64 有符号溢出 UB 与误导性报错（issue #139，
+    // 检视意见：此前仅前移了校验到守卫 CHECK 之前，估算算术本身仍在校验前执行）
+    SOLVER_ECHECK(
+        n > 0 && batchSize > 0 && lda > 0 && lda_inv > 0 && A != nullptr && Ainv != nullptr && info != nullptr,
+        "CgetriBatched get invalid param: n, batchSize, lda, lda_inv <= 0, or A, Ainv, info is nullptr.",
+        ACL_ERROR_INVALID_PARAM);
+    SOLVER_ECHECK(n <= MAX_MATRIX_SHAPE && batchSize <= MAX_MATRIX_BATCH,
+                  "CgetriBatched get n > 256 or batchSize > 3000, which exceeds the supported limit.",
+                  ACL_ERROR_INVALID_PARAM);
+    SOLVER_ECHECK(n >= MATRIX_SHAPE_LIMIT,
+                  "CgetriBatched only supports n >= 32. For n < 32, use "
+                  "CmatinvBatched instead.",
+                  ACL_ERROR_INVALID_PARAM);
+    SOLVER_ECHECK(lda == n && lda_inv == n, "CgetriBatched only supports lda == n and lda_inv == n in current version.",
+                  ACL_ERROR_INVALID_PARAM);
+
     // Staging guard: eyeBatchMatData alone is batchNum * eyeMatEleNum floats
     // and the packed work buffers add more; cap the combined estimate.
     const int64_t alignedN = (n + COL_ALIGNED_ELENUM - 1) / COL_ALIGNED_ELENUM * COL_ALIGNED_ELENUM;
@@ -190,6 +207,8 @@ aclError CgetriBatchedImpl(aclsolverHandle_t handle, const int64_t n, std::compl
             gatherOffset2[idx2++] = static_cast<uint32_t>((j * blockM + i) * sizeof(float));
         }
     }
+    // gather3 与 kernel 的 MergeRealImag 消费口径对齐：按 alignedN = ceil8(n) 展开偏移对，
+    // 而非未对齐的 n（issue #137；与 utils/lu_host_common.h 的共享实现同口径，issue #144）
     int64_t idx3 = 0;
     int64_t nn = std::min(N, TILE_LENGTH);
     if (nn <= 0)
@@ -197,13 +216,18 @@ aclError CgetriBatchedImpl(aclsolverHandle_t handle, const int64_t n, std::compl
         LOG_PRINT("CgetriBatched get invalid N for gather3, skip gather3 filling.\n");
         nn = 0;
     }
-    int64_t mm = (nn > 0) ? (TILE_LENGTH / nn) : 0;
-    for (int64_t i = 0; i < mm; ++i)
+    if (nn > 0)
     {
-        for (int64_t j = 0; j < nn; ++j)
+        const int64_t alignedNn = (nn + GATHER3_ALIGN - 1) / GATHER3_ALIGN * GATHER3_ALIGN;
+        const int64_t effN = alignedNn < TILE_LENGTH ? alignedNn : TILE_LENGTH;
+        const int64_t mm = TILE_LENGTH / effN;
+        for (int64_t i = 0; i < mm; ++i)
         {
-            gatherOffset3[idx3++] = static_cast<uint32_t>((i * nn + j) * sizeof(float));
-            gatherOffset3[idx3++] = static_cast<uint32_t>((i * nn + j + TILE_LENGTH) * sizeof(float));
+            for (int64_t j = 0; j < effN; ++j)
+            {
+                gatherOffset3[idx3++] = static_cast<uint32_t>((i * effN + j) * sizeof(float));
+                gatherOffset3[idx3++] = static_cast<uint32_t>((i * effN + j + TILE_LENGTH) * sizeof(float));
+            }
         }
     }
     for (int64_t b = 0; b < batchNum; ++b)

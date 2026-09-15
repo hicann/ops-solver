@@ -23,11 +23,10 @@
 #include <vector>
 
 #include "../utils/assert.h"
+#include "../utils/gm_addr.h"
 #include "acl/acl.h"
 #include "cann_ops_solver.h"
 #include "tiling/platform/platform_ascendc.h"
-
-#define GM_ADDR uint8_t *
 
 extern void cmatinv_batched_kernel_do(GM_ADDR dA, GM_ADDR dUniReal, GM_ADDR dUniImag, GM_ADDR dOffset, GM_ADDR dAinv,
                                       GM_ADDR workSpace, GM_ADDR tilingGm, uint32_t numBlocks, void *stream);

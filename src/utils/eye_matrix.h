@@ -26,11 +26,16 @@ static constexpr size_t EYE_FLOATS_PER_COMPLEX_ELEMENT = 2;
 
 // 初始化 eye 缓冲区为单位阵（对角 1，其余 0），floatsPerElement 为每元素的 float 分量数，
 // 初始化失败（memset_s 非 EOK）返回 false
-inline bool GenerateEyeMatrix(int64_t N, int64_t strideN, uint8_t *eyeBuf, size_t floatsPerElement)
+// 初始化 eye 缓冲区为单位阵（对角 1，其余 0），floatsPerElement 为每元素的 float 分量数。
+// paddedRows 为缓冲的完整行数（行对齐 + padding 行）：清零范围必须覆盖整个缓冲，
+// 否则 padding 行携带宿主未初始化内存被整体 H2D 上设备（issue #136）。
+// 初始化失败（memset_s 非 EOK）返回 false
+inline bool GenerateEyeMatrix(int64_t N, int64_t strideN, int64_t paddedRows, uint8_t *eyeBuf, size_t floatsPerElement)
 {
     auto buf = reinterpret_cast<float *>(eyeBuf);
+    const int64_t zeroRows = paddedRows > ((N + 15) / 16 * 16) ? paddedRows : (N + 15) / 16 * 16;
     const size_t eyeSize =
-        static_cast<size_t>((N + 15) / 16 * 16) * static_cast<size_t>(strideN) * sizeof(float) * floatsPerElement;
+        static_cast<size_t>(zeroRows) * static_cast<size_t>(strideN) * sizeof(float) * floatsPerElement;
     if (memset_s(buf, eyeSize, 0, eyeSize) != EOK)
     {
         return false;
