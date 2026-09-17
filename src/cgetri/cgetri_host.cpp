@@ -25,7 +25,6 @@
 #include "../utils/lu_host_common.h"
 #include "acl/acl.h"
 #include "cann_ops_solver.h"
-#include "tiling/platform/platform_ascendc.h"
 
 extern void cgetri_kernel_do(GM_ADDR sync, int orgM, int orgN, int blockM, int blockN, int tileM, GM_ADDR A_org,
                              GM_ADDR A_work, GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm,
@@ -52,22 +51,10 @@ aclError aclsolverCgetri(aclsolverHandle_t handle, const int64_t n, std::complex
         aclsolverGetStream(handle, &stream);
     }
 
-    auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance();
-    uint32_t numBlocks = 0;
-    if (ascendcPlatform != nullptr)
-    {
-        numBlocks = ascendcPlatform->GetCoreNumAic();
-    }
-
-    if (numBlocks > 20)
-    {
-        numBlocks = 20;
-    }
-    // 平台信息查询失败时 GetCoreNumAic 可能返回 0，按 1 处理，避免以 0 block 启动内核
-    if (numBlocks == 0)
-    {
-        numBlocks = 1;
-    }
+    // 与 sgetrf/cgetrf 对齐：kernel 侧 LU 实现按固定 20 块设计（blockIdx 8/10 负责
+    // A/eye 主元行交换、coreIdx>=4 承担 trsm/gemm），块数不足时这些角色无人执行而
+    // 求逆结果静默错误，故必须固定使用 LU_MAX_NUM_BLOCKS（issue #147）
+    const uint32_t numBlocks = LU_MAX_NUM_BLOCKS;
 
     const int64_t blockM = LU_ROW_ALIGNED;
     const int64_t blockN = LU_BLOCK_N;

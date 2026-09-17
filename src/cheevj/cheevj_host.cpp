@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "../utils/assert.h"
+#include "../utils/gm_addr.h"
 #include "acl/acl.h"
 #include "cann_ops_solver.h"
 #include "cheevj_launchers.hpp"
@@ -1156,7 +1157,6 @@ void ApplyAdjointToProbes(const std::vector<Complex>& vectors, const std::vector
     }
 }
 
-#include "../utils/gm_addr.h"
 #include "cheevj_fixed_host.inc"
 
 aclError CopyCompleteVectorOutput(uint8_t* deviceInfo, uint8_t* eigenvalues, const FixedMatrixSlices& matrix,
