@@ -68,6 +68,12 @@ static constexpr int64_t CHEEVJ_FIXED_N2048 = 2048;
 static constexpr int64_t CHEEVJ_FIXED_PANEL_WIDTH = 32;
 static constexpr int64_t CHEEVJ_FIXED_PANEL_SIZE = 16;
 static constexpr int64_t CHEEVJ_FIXED_PANEL_PARTICIPANTS = 33;
+// host 回退路径 OpenMP 并行阈值/线程数：低于对应阈值时并行开销大于收益，
+// 退化为串行；线程数按典型开发环境核数设置。
+static constexpr int64_t HOST_OMP_PARALLEL_MIN_N = 256;
+static constexpr int64_t HOST_OMP_PARALLEL_MIN_ACTIVE = 128;
+static constexpr int HOST_OMP_THREAD_NUM = 16;
+
 static constexpr int ORTHOGONALITY_PROBE_COUNT = 16;
 
 struct CheevjTilingData
@@ -195,7 +201,7 @@ void PackFullMatrix(const Complex* a, int64_t lda, int64_t n, int32_t uplo, std:
 {
     packed->assign(static_cast<size_t>(n * n), Complex(0.0f, 0.0f));
     const bool lower = IsLowerMode(uplo);
-#pragma omp parallel for if (n >= 512) num_threads(16) schedule(static)
+#pragma omp parallel for if (n >= HOST_OMP_PARALLEL_MIN_N * 2) num_threads(HOST_OMP_THREAD_NUM) schedule(static)
     for (int64_t col = 0; col < n; ++col)
     {
         for (int64_t row = 0; row < n; ++row)
@@ -211,7 +217,7 @@ bool IsInputDiagonal(const Complex* a, int64_t lda, int64_t n, bool lower)
     if (n >= 1024)
     {
         int isDiagonal = 1;
-#pragma omp parallel for num_threads(16) schedule(static) reduction(& : isDiagonal)
+#pragma omp parallel for num_threads(HOST_OMP_THREAD_NUM) schedule(static) reduction(& : isDiagonal)
         for (int64_t col = 0; col < n; ++col)
         {
             const int64_t rowBegin = lower ? col + 1 : 0;
@@ -242,7 +248,7 @@ bool IsInputTwoByTwoBlockDiagonal(const Complex* a, int64_t lda, int64_t n, bool
     if (n >= 1024)
     {
         int isBlockDiagonal = 1;
-#pragma omp parallel for num_threads(16) schedule(static) reduction(& : isBlockDiagonal)
+#pragma omp parallel for num_threads(HOST_OMP_THREAD_NUM) schedule(static) reduction(& : isBlockDiagonal)
         for (int64_t col = 0; col < n; ++col)
         {
             const bool hasStoredBlockMate = lower ? (col % 2 == 0 && col + 1 < n) : (col % 2 != 0);
@@ -305,7 +311,7 @@ void ClearInputMatrix(Complex* a, int64_t lda, int64_t n)
 {
     if (n >= 1024)
     {
-#pragma omp parallel for num_threads(16) schedule(static)
+#pragma omp parallel for num_threads(HOST_OMP_THREAD_NUM) schedule(static)
         for (int64_t column = 0; column < n; ++column)
         {
             std::fill_n(a + column * lda, n, Complex(0.0f, 0.0f));
@@ -865,7 +871,7 @@ std::vector<DoubleComplex> BuildHouseholderUpdate(const std::vector<DoubleComple
 {
     const int64_t active = n - begin;
     std::vector<DoubleComplex> update(static_cast<size_t>(active));
-#pragma omp parallel for if (active >= 256) num_threads(16) schedule(static)
+#pragma omp parallel for if (active >= HOST_OMP_PARALLEL_MIN_N) num_threads(HOST_OMP_THREAD_NUM) schedule(static)
     for (int64_t row = 0; row < active; ++row)
     {
         DoubleComplex sum(0.0, 0.0);
@@ -893,7 +899,7 @@ void ApplyHouseholderUpdate(std::vector<DoubleComplex>* work, const std::vector<
                             const std::vector<DoubleComplex>& update, int64_t n, int64_t begin)
 {
     const int64_t active = n - begin;
-#pragma omp parallel for if (active >= 128) num_threads(16) schedule(static)
+#pragma omp parallel for if (active >= HOST_OMP_PARALLEL_MIN_ACTIVE) num_threads(HOST_OMP_THREAD_NUM) schedule(static)
     for (int64_t row = 0; row < active; ++row)
     {
         const size_t rowOffset = static_cast<size_t>((begin + row) * n + begin);
@@ -980,7 +986,7 @@ std::vector<DoubleComplex> BacktransformHouseholderVectors(const std::vector<Dou
                                                            const std::vector<int64_t>& permutation, int64_t n)
 {
     std::vector<DoubleComplex> eigenvectors(static_cast<size_t>(n * n));
-#pragma omp parallel for if (n >= 256) num_threads(16) schedule(static)
+#pragma omp parallel for if (n >= HOST_OMP_PARALLEL_MIN_N) num_threads(HOST_OMP_THREAD_NUM) schedule(static)
     for (int64_t column = 0; column < n; ++column)
     {
         const int64_t source = permutation[static_cast<size_t>(column)];
@@ -1017,7 +1023,7 @@ void WriteHouseholderEigenvectors(const std::vector<DoubleComplex>& eigenvectors
                                   int64_t n)
 {
     matrix->resize(static_cast<size_t>(n * n));
-#pragma omp parallel for if (n >= 512) num_threads(16) schedule(static)
+#pragma omp parallel for if (n >= HOST_OMP_PARALLEL_MIN_N * 2) num_threads(HOST_OMP_THREAD_NUM) schedule(static)
     for (int64_t column = 0; column < n; ++column)
     {
         for (int64_t row = 0; row < n; ++row)
@@ -1033,7 +1039,7 @@ bool SolveCompactHostHouseholder(std::vector<Complex>* matrix, int64_t n, bool c
 {
     const size_t matrixElements = static_cast<size_t>(n * n);
     std::vector<DoubleComplex> work(matrixElements);
-#pragma omp parallel for if (n >= 512) num_threads(16) schedule(static)
+#pragma omp parallel for if (n >= HOST_OMP_PARALLEL_MIN_N * 2) num_threads(HOST_OMP_THREAD_NUM) schedule(static)
     for (int64_t row = 0; row < n; ++row)
     {
         for (int64_t col = 0; col < n; ++col)
@@ -1080,7 +1086,7 @@ bool SolveCompactHostHouseholder(std::vector<Complex>* matrix, int64_t n, bool c
 
 void ScatterFullMatrix(const std::vector<Complex>& packed, int64_t lda, int64_t n, Complex* a)
 {
-#pragma omp parallel for if (n >= 512) num_threads(16) schedule(static)
+#pragma omp parallel for if (n >= HOST_OMP_PARALLEL_MIN_N * 2) num_threads(HOST_OMP_THREAD_NUM) schedule(static)
     for (int64_t col = 0; col < n; ++col)
     {
         for (int64_t row = 0; row < n; ++row)
@@ -1109,7 +1115,7 @@ void BuildOrthogonalityProbes(std::vector<Complex>* probeValues, int64_t n, floa
 void ApplyVectorsToProbes(const std::vector<Complex>& vectors, const std::vector<Complex>& probeValues, int64_t n,
                           std::vector<Complex>* transformed)
 {
-#pragma omp parallel for if (n >= 512) num_threads(16) schedule(static)
+#pragma omp parallel for if (n >= HOST_OMP_PARALLEL_MIN_N * 2) num_threads(HOST_OMP_THREAD_NUM) schedule(static)
     for (int64_t row = 0; row < n; ++row)
     {
         std::array<Complex, ORTHOGONALITY_PROBE_COUNT> sums{};
@@ -1131,7 +1137,7 @@ void ApplyVectorsToProbes(const std::vector<Complex>& vectors, const std::vector
 void ApplyAdjointToProbes(const std::vector<Complex>& vectors, const std::vector<Complex>& transformed, int64_t n,
                           std::vector<Complex>* reconstructed)
 {
-#pragma omp parallel for if (n >= 512) num_threads(16) schedule(static)
+#pragma omp parallel for if (n >= HOST_OMP_PARALLEL_MIN_N * 2) num_threads(HOST_OMP_THREAD_NUM) schedule(static)
     for (int64_t col = 0; col < n; ++col)
     {
         std::array<Complex, ORTHOGONALITY_PROBE_COUNT> sums{};
@@ -1286,7 +1292,8 @@ std::vector<Complex> PreparePaddedMatrix(const Complex* a, int64_t lda, int64_t 
     std::vector<Complex> padded(static_cast<size_t>(paddedN * paddedN), Complex(0.0f, 0.0f));
     double spectralBound = 1.0;
     const bool lower = IsLowerMode(uplo);
-#pragma omp parallel for if (n >= 256) num_threads(16) schedule(static) reduction(max : spectralBound)
+#pragma omp parallel for if (n >= HOST_OMP_PARALLEL_MIN_N) num_threads(HOST_OMP_THREAD_NUM) schedule(static) \
+    reduction(max : spectralBound)
     for (int64_t row = 0; row < n; ++row)
     {
         double rowSum = 0.0;
@@ -1338,7 +1345,7 @@ std::vector<Complex> CropPaddedEigenvectors(const std::vector<Complex>& padded, 
                                             int64_t n, int64_t paddedN)
 {
     std::vector<Complex> cropped(static_cast<size_t>(n * n));
-#pragma omp parallel for if (n >= 256) num_threads(16) schedule(static)
+#pragma omp parallel for if (n >= HOST_OMP_PARALLEL_MIN_N) num_threads(HOST_OMP_THREAD_NUM) schedule(static)
     for (int64_t col = 0; col < n; ++col)
     {
         const int64_t sourceCol = eigenOrder[static_cast<size_t>(col)];
@@ -1672,7 +1679,7 @@ CheevjTilingData BuildCheevjTilingData(int64_t n, int64_t deviceLda, int32_t job
 void CopyGenericDeviceVectors(const std::vector<Complex>& deviceA, int64_t deviceLda, int64_t n,
                               std::vector<Complex>* packedA)
 {
-#pragma omp parallel for if (n >= 512) num_threads(16) schedule(static)
+#pragma omp parallel for if (n >= HOST_OMP_PARALLEL_MIN_N * 2) num_threads(HOST_OMP_THREAD_NUM) schedule(static)
     for (int64_t col = 0; col < n; ++col)
     {
         for (int64_t row = 0; row < n; ++row)

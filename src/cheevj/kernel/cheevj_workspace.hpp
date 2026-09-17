@@ -20,6 +20,7 @@
 
 #include "kernel_operator.h"
 
+// 本地定义 GM_ADDR：kernel 编译单元不能使用 utils/gm_addr.h（原因见 cheevj_kernel.cpp 同宏定义处注释）。
 #ifndef GM_ADDR
 #define GM_ADDR uint8_t *
 #endif
@@ -43,10 +44,7 @@ constexpr int CHEEVJ_WS_PLANE_V_IMAG = 4;
 constexpr int CHEEVJ_WS_PLANES_NO_VECTOR = 3;
 constexpr int CHEEVJ_WS_PLANES_VECTOR = 5;
 
-__aicore__ inline int AlignUp(int value, int align)
-{
-    return align > 0 ? (value + align - 1) / align * align : value;
-}
+__aicore__ inline int AlignUp(int value, int align) { return align > 0 ? (value + align - 1) / align * align : value; }
 
 __aicore__ inline int AlignUp128(int value) { return AlignUp(value, CHEEVJ_WORKSPACE_STRIDE_N_ALIGN); }
 

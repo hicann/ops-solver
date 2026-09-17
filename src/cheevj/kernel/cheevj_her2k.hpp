@@ -21,6 +21,7 @@
 #include "../../utils/kernel/c64/gemm.hpp"
 #include "kernel_operator.h"
 
+// 本地定义 GM_ADDR：kernel 编译单元不能使用 utils/gm_addr.h（原因见 cheevj_kernel.cpp 同宏定义处注释）。
 #ifndef GM_ADDR
 #define GM_ADDR uint8_t*
 #endif
@@ -94,7 +95,7 @@ class CheevjHer2kEpilogue
 {
    public:
     __aicore__ inline void Init(AscendC::TPipe* pipe, GM_ADDR cReal, GM_ADDR cImag, GM_ADDR dReal, GM_ADDR dImag,
-                               GM_ADDR matrixReal, GM_ADDR matrixImag, int panelStart, int activeN)
+                                GM_ADDR matrixReal, GM_ADDR matrixImag, int panelStart, int activeN)
     {
 #ifdef __DAV_C220_VEC__
         cRealGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ float*>(cReal));

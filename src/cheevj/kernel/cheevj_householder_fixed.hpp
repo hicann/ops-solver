@@ -20,6 +20,7 @@
 
 #include "kernel_operator.h"
 
+// 本地定义 GM_ADDR：kernel 编译单元不能使用 utils/gm_addr.h（原因见 cheevj_kernel.cpp 同宏定义处注释）。
 #ifndef GM_ADDR
 #define GM_ADDR uint8_t *
 #endif
@@ -86,13 +87,15 @@ __aicore__ inline float CheevjPersistentReduce512(const AscendC::LocalTensor<flo
                                                   const AscendC::LocalTensor<float> &result)
 {
     return CheevjHouseholderReduce<CHEEVJ_HH_PERSISTENT_SEGMENT, CHEEVJ_HH_PERSISTENT_SEGMENTS>(source, partials,
-                                                                                               result);
+                                                                                                result);
 }
 
-__aicore__ inline void CheevjIgnoreHouseholderInitArgs(
-    AscendC::TPipe *pipe, GM_ADDR matrixReal, GM_ADDR matrixImag, GM_ADDR panelVReal, GM_ADDR panelVImag,
-    GM_ADDR panelWReal, GM_ADDR panelWImag, GM_ADDR wHReal, GM_ADDR wHImag, GM_ADDR wHImagNeg, GM_ADDR diagonal,
-    GM_ADDR offDiagonal, GM_ADDR tauReal, GM_ADDR tauImag, GM_ADDR panelWorkspace, GM_ADDR barrierWorkspace)
+__aicore__ inline void CheevjIgnoreHouseholderInitArgs(AscendC::TPipe *pipe, GM_ADDR matrixReal, GM_ADDR matrixImag,
+                                                       GM_ADDR panelVReal, GM_ADDR panelVImag, GM_ADDR panelWReal,
+                                                       GM_ADDR panelWImag, GM_ADDR wHReal, GM_ADDR wHImag,
+                                                       GM_ADDR wHImagNeg, GM_ADDR diagonal, GM_ADDR offDiagonal,
+                                                       GM_ADDR tauReal, GM_ADDR tauImag, GM_ADDR panelWorkspace,
+                                                       GM_ADDR barrierWorkspace)
 {
     (void)pipe;
     (void)matrixReal;
@@ -161,8 +164,7 @@ constexpr int CHEEVJ_HH_N1024_STREAMED_ACCUM = CHEEVJ_HH_N1024_STREAMED_ROWS * C
 constexpr int CHEEVJ_HH_N1024_STREAMED_SCATTER_VALUES = 8;
 constexpr int CHEEVJ_HH_N1024_STREAMED_SCATTER = CHEEVJ_HH_N1024_STREAMED_SCATTER_VALUES * 8;
 constexpr int CHEEVJ_HH_N1024_STREAMED_FULL_SCATTER = CHEEVJ_HH_N1024_STREAMED_N * 8;
-constexpr int CHEEVJ_HH_N1024_STREAMED_BARRIER_INTS =
-    CHEEVJ_HH_N1024_STREAMED_PARTICIPANTS * 16;
+constexpr int CHEEVJ_HH_N1024_STREAMED_BARRIER_INTS = CHEEVJ_HH_N1024_STREAMED_PARTICIPANTS * 16;
 
 // Float workspace layout.  The software-barrier workspace is a separate
 // int32 allocation and is intentionally not aliased with these panel arrays.

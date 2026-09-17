@@ -132,7 +132,7 @@ install_python() {
             ;;
         macos)
             run_command brew install python@3.10
-            echo 'export PATH="/usr/local/opt/python@3.10/bin:$PATH' >> ~/.zshrc
+            echo 'export PATH="/usr/local/opt/python@3.10/bin:$PATH"' >> ~/.zshrc
             run_command source ~/.zshrc
             ;;
         euler)

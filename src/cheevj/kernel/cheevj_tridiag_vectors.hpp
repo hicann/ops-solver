@@ -20,6 +20,7 @@
 
 #include "kernel_operator.h"
 
+// 本地定义 GM_ADDR：kernel 编译单元不能使用 utils/gm_addr.h（原因见 cheevj_kernel.cpp 同宏定义处注释）。
 #ifndef GM_ADDR
 #define GM_ADDR uint8_t *
 #endif
@@ -60,8 +61,7 @@ class CheevjTridiagFixedVectors
 #include "cheevj_tridiag_vectors_fixed_impl.inc"
 };
 
-using CheevjTridiag512Vectors =
-    CheevjTridiagFixedVectors<CHEEVJ_TRIDIAG512_N, CHEEVJ_TRIDIAG512_ROWS_PER_WORKER>;
+using CheevjTridiag512Vectors = CheevjTridiagFixedVectors<CHEEVJ_TRIDIAG512_N, CHEEVJ_TRIDIAG512_ROWS_PER_WORKER>;
 
 constexpr int CHEEVJ_TRIDIAG1024_N = 1024;
 constexpr int CHEEVJ_TRIDIAG1024_ROW_WORKERS = 32;
@@ -93,8 +93,7 @@ enum CheevjTridiag1024Command : int32_t
 using CheevjTridiag1024VectorsReset =
     CheevjTridiagVectorsReset<CHEEVJ_TRIDIAG1024_BARRIER_INTS, CHEEVJ_TRIDIAG1024_COMMAND_INTS>;
 
-using CheevjTridiag1024Vectors =
-    CheevjTridiagFixedVectors<CHEEVJ_TRIDIAG1024_N, CHEEVJ_TRIDIAG1024_ROWS_PER_WORKER>;
+using CheevjTridiag1024Vectors = CheevjTridiagFixedVectors<CHEEVJ_TRIDIAG1024_N, CHEEVJ_TRIDIAG1024_ROWS_PER_WORKER>;
 
 // N=2048 tridiagonal eigenvector branch.
 

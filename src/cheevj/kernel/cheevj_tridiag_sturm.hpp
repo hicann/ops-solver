@@ -20,6 +20,7 @@
 
 #include "kernel_operator.h"
 
+// 本地定义 GM_ADDR：kernel 编译单元不能使用 utils/gm_addr.h（原因见 cheevj_kernel.cpp 同宏定义处注释）。
 #ifndef GM_ADDR
 #define GM_ADDR uint8_t *
 #endif

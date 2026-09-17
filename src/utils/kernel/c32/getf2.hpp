@@ -13,8 +13,8 @@
  * \brief
  */
 
-#ifndef _GETF2_HPP_
-#define _GETF2_HPP_
+#ifndef C32_GETF2_HPP_
+#define C32_GETF2_HPP_
 
 #include <lib/matrix/matmul/matmul.h>
 
@@ -472,4 +472,4 @@ class SwapRows
     }
 };
 
-#endif  // _GETF2_HPP_
+#endif  // C32_GETF2_HPP_

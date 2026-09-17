@@ -24,6 +24,7 @@
 
 #include "kernel_operator.h"
 
+// 本地定义 GM_ADDR：kernel 编译单元不能使用 utils/gm_addr.h（原因见 cheevj_kernel.cpp 同宏定义处注释）。
 #ifndef GM_ADDR
 #define GM_ADDR uint8_t*
 #endif
@@ -33,9 +34,9 @@ namespace Cheevj
 
 constexpr int CHEEVJ_FIXED_PANEL_WIDTH = 32;
 
-__aicore__ inline void CopyFloatRow(const AscendC::LocalTensor<float>& row,
-                                    const AscendC::GlobalTensor<float>& source, int sourceOffset,
-                                    AscendC::GlobalTensor<float> destination, int destinationOffset, int count)
+__aicore__ inline void CopyFloatRow(const AscendC::LocalTensor<float>& row, const AscendC::GlobalTensor<float>& source,
+                                    int sourceOffset, AscendC::GlobalTensor<float> destination, int destinationOffset,
+                                    int count)
 {
     AscendC::DataCopyExtParams copy{1, static_cast<uint32_t>(count * sizeof(float)), 0, 0, 0};
     AscendC::DataCopyPadExtParams<float> pad{false, 0, 0, 0.0f};
@@ -181,7 +182,6 @@ class CheevjE2EPreparePacked
         }
         AscendC::PipeBarrier<PIPE_ALL>();
     }
-
 };
 
 template <int MatrixN>
@@ -239,7 +239,6 @@ class CheevjE2EUnpack
     AscendC::TBuf<AscendC::TPosition::VECCALC> rowRealBuf;
     AscendC::TBuf<AscendC::TPosition::VECCALC> rowImagBuf;
     int start = 0;
-
 };
 
 template <int MatrixN>

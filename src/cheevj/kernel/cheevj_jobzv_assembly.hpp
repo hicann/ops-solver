@@ -20,6 +20,7 @@
 
 #include "kernel_operator.h"
 
+// 本地定义 GM_ADDR：kernel 编译单元不能使用 utils/gm_addr.h（原因见 cheevj_kernel.cpp 同宏定义处注释）。
 #ifndef GM_ADDR
 #define GM_ADDR uint8_t *
 #endif
@@ -54,8 +55,8 @@ static_assert(CHEEVJ_E2E_N512_JOBZV_ARCHIVE_UB_BYTES <= 192 * 1024, "n512 reflec
 static_assert(CHEEVJ_E2E_N512_JOBZV_BACKTRANSFORM_UB_BYTES <= 192 * 1024, "n512 reverse backtransform exceeds C220 UB");
 
 using CheevjE2EN512ArchivePanelReflectors =
-    CheevjArchivePanelReflectors<CHEEVJ_E2E_N512_JOBZV_N, CHEEVJ_E2E_N512_JOBZV_PANEL,
-                                 CHEEVJ_E2E_N512_JOBZV_PANEL_LD, CHEEVJ_E2E_N512_JOBZV_GATHER_TILE>;
+    CheevjArchivePanelReflectors<CHEEVJ_E2E_N512_JOBZV_N, CHEEVJ_E2E_N512_JOBZV_PANEL, CHEEVJ_E2E_N512_JOBZV_PANEL_LD,
+                                 CHEEVJ_E2E_N512_JOBZV_GATHER_TILE>;
 
 class CheevjE2EN512JobzVBacktransform
 {
@@ -136,8 +137,7 @@ class CheevjE2EN512JobzVBacktransform
         {
             const int globalColumn = columnBegin + localColumn;
             CopyIn(localReal[localColumn * CHEEVJ_E2E_N512_JOBZV_N],
-                   tridiagonalEigenvectorsGlobal[globalColumn * CHEEVJ_E2E_N512_JOBZV_N],
-                   CHEEVJ_E2E_N512_JOBZV_N);
+                   tridiagonalEigenvectorsGlobal[globalColumn * CHEEVJ_E2E_N512_JOBZV_N], CHEEVJ_E2E_N512_JOBZV_N);
         }
     }
 
@@ -168,8 +168,7 @@ class CheevjE2EN512JobzVBacktransform
     }
 
     template <int Offset, int Count>
-    __aicore__ inline void ApplyReflectorRange(float tauR, float tauI,
-                                               const AscendC::LocalTensor<float> &vectorReal,
+    __aicore__ inline void ApplyReflectorRange(float tauR, float tauI, const AscendC::LocalTensor<float> &vectorReal,
                                                const AscendC::LocalTensor<float> &vectorImag)
     {
         auto reflectorReal = reflectorRealBuf.Get<float>()[Offset];
@@ -250,10 +249,11 @@ using CheevjE2EN1024ArchivePanelReflectors =
     CheevjArchivePanelReflectors<CHEEVJ_E2E_N1024_JOBZV_N, CHEEVJ_E2E_N1024_JOBZV_PANEL,
                                  CHEEVJ_E2E_N1024_JOBZV_PANEL_LD, CHEEVJ_E2E_N1024_JOBZV_GATHER_TILE>;
 
-using CheevjE2EN1024JobzVBacktransform = CheevjStreamedJobzVBacktransform<
-    CHEEVJ_E2E_N1024_JOBZV_N, CHEEVJ_E2E_N1024_JOBZV_WORKERS, CHEEVJ_E2E_N1024_JOBZV_COLUMNS_PER_WAVE,
-    CHEEVJ_E2E_N1024_JOBZV_WAVES, CHEEVJ_E2E_N1024_JOBZV_LOCAL_MATRIX, CHEEVJ_E2E_N1024_JOBZV_GATHER_TILE,
-    CHEEVJ_E2E_N1024_JOBZV_REDUCTION_LANES>;
+using CheevjE2EN1024JobzVBacktransform =
+    CheevjStreamedJobzVBacktransform<CHEEVJ_E2E_N1024_JOBZV_N, CHEEVJ_E2E_N1024_JOBZV_WORKERS,
+                                     CHEEVJ_E2E_N1024_JOBZV_COLUMNS_PER_WAVE, CHEEVJ_E2E_N1024_JOBZV_WAVES,
+                                     CHEEVJ_E2E_N1024_JOBZV_LOCAL_MATRIX, CHEEVJ_E2E_N1024_JOBZV_GATHER_TILE,
+                                     CHEEVJ_E2E_N1024_JOBZV_REDUCTION_LANES>;
 
 // N=2048 archive and backtransform branch.
 
@@ -294,10 +294,11 @@ using CheevjE2EN2048ArchivePanelReflectors =
     CheevjArchivePanelReflectors<CHEEVJ_E2E_N2048_JOBZV_N, CHEEVJ_E2E_N2048_JOBZV_PANEL,
                                  CHEEVJ_E2E_N2048_JOBZV_PANEL_LD, CHEEVJ_E2E_N2048_JOBZV_GATHER_TILE>;
 
-using CheevjE2EN2048JobzVBacktransform = CheevjStreamedJobzVBacktransform<
-    CHEEVJ_E2E_N2048_JOBZV_N, CHEEVJ_E2E_N2048_JOBZV_WORKERS, CHEEVJ_E2E_N2048_JOBZV_COLUMNS_PER_WAVE,
-    CHEEVJ_E2E_N2048_JOBZV_WAVES, CHEEVJ_E2E_N2048_JOBZV_LOCAL_ALLOCATION, CHEEVJ_E2E_N2048_JOBZV_GATHER_TILE,
-    CHEEVJ_E2E_N2048_JOBZV_REDUCTION_LANES>;
+using CheevjE2EN2048JobzVBacktransform =
+    CheevjStreamedJobzVBacktransform<CHEEVJ_E2E_N2048_JOBZV_N, CHEEVJ_E2E_N2048_JOBZV_WORKERS,
+                                     CHEEVJ_E2E_N2048_JOBZV_COLUMNS_PER_WAVE, CHEEVJ_E2E_N2048_JOBZV_WAVES,
+                                     CHEEVJ_E2E_N2048_JOBZV_LOCAL_ALLOCATION, CHEEVJ_E2E_N2048_JOBZV_GATHER_TILE,
+                                     CHEEVJ_E2E_N2048_JOBZV_REDUCTION_LANES>;
 
 }  // namespace Cheevj
 

@@ -20,6 +20,7 @@
 
 #include "kernel_operator.h"
 
+// 本地定义 GM_ADDR：kernel 编译单元不能使用 utils/gm_addr.h（原因见 cheevj_kernel.cpp 同宏定义处注释）。
 #ifndef GM_ADDR
 #define GM_ADDR uint8_t *
 #endif
@@ -30,8 +31,7 @@ namespace Cheevj
 constexpr int CHEEVJ_TRIDIAG_INVERSE_MAX_N = 2048;
 constexpr int CHEEVJ_TRIDIAG_INVERSE_COLUMNS = 8;
 constexpr int CHEEVJ_TRIDIAG_INVERSE_WORKERS = 32;
-constexpr int CHEEVJ_TRIDIAG_INVERSE_WAVE_COLUMNS =
-    CHEEVJ_TRIDIAG_INVERSE_COLUMNS * CHEEVJ_TRIDIAG_INVERSE_WORKERS;
+constexpr int CHEEVJ_TRIDIAG_INVERSE_WAVE_COLUMNS = CHEEVJ_TRIDIAG_INVERSE_COLUMNS * CHEEVJ_TRIDIAG_INVERSE_WORKERS;
 constexpr int CHEEVJ_TRIDIAG_INVERSE_COEFFICIENT_BATCH = 8;
 constexpr float CHEEVJ_TRIDIAG_INVERSE_SHIFT_SCALE = 1.0e-5f;
 constexpr float CHEEVJ_TRIDIAG_INVERSE_PIVOT_BIAS = 1.0e-20f;
@@ -156,8 +156,7 @@ class CheevjTridiagInverseIteration
                     uint32_t bits = static_cast<uint32_t>(row + 1) * 2654435761U;
                     bits ^= static_cast<uint32_t>(firstColumn + localColumn + 1) * 2246822519U;
                     bits ^= bits >> 16;
-                    work.SetValue(row * CHEEVJ_TRIDIAG_INVERSE_COLUMNS + localColumn,
-                                  (bits & 1U) == 0U ? 1.0f : -1.0f);
+                    work.SetValue(row * CHEEVJ_TRIDIAG_INVERSE_COLUMNS + localColumn, (bits & 1U) == 0U ? 1.0f : -1.0f);
                 }
             }
         }
@@ -179,7 +178,7 @@ class CheevjTridiagInverseIteration
     }
 
     __aicore__ inline void LoadOne(const AscendC::LocalTensor<float> &destination,
-                                    const AscendC::GlobalTensor<float> &source, int count)
+                                   const AscendC::GlobalTensor<float> &source, int count)
     {
         AscendC::DataCopyExtParams copy{1, static_cast<uint32_t>(count * sizeof(float)), 0, 0, 0};
         AscendC::DataCopyPadExtParams<float> pad{true, 0, static_cast<uint8_t>((8 - count % 8) % 8), 0.0f};
@@ -222,8 +221,7 @@ class CheevjTridiagInverseIteration
         AscendC::Brcb(diagonalBroadcast, diagonal[rowBase], 1, {1, 8});
         if (rowBase >= CHEEVJ_TRIDIAG_INVERSE_COEFFICIENT_BATCH)
         {
-            AscendC::Brcb(edgePrevious, offDiagonal[rowBase - CHEEVJ_TRIDIAG_INVERSE_COEFFICIENT_BATCH], 1,
-                          {1, 8});
+            AscendC::Brcb(edgePrevious, offDiagonal[rowBase - CHEEVJ_TRIDIAG_INVERSE_COEFFICIENT_BATCH], 1, {1, 8});
         }
         else
         {
@@ -269,10 +267,9 @@ class CheevjTridiagInverseIteration
         for (int rowBase = 0; rowBase < matrixOrder; rowBase += CHEEVJ_TRIDIAG_INVERSE_COEFFICIENT_BATCH)
         {
             BroadcastBatch(rowBase);
-            const int rows =
-                matrixOrder - rowBase < CHEEVJ_TRIDIAG_INVERSE_COEFFICIENT_BATCH
-                    ? matrixOrder - rowBase
-                    : CHEEVJ_TRIDIAG_INVERSE_COEFFICIENT_BATCH;
+            const int rows = matrixOrder - rowBase < CHEEVJ_TRIDIAG_INVERSE_COEFFICIENT_BATCH
+                                 ? matrixOrder - rowBase
+                                 : CHEEVJ_TRIDIAG_INVERSE_COEFFICIENT_BATCH;
             for (int slot = 0; slot < rows; ++slot)
             {
                 const int row = rowBase + slot;

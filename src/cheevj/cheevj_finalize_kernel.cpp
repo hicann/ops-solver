@@ -16,6 +16,7 @@
 #include "kernel/cheevj_e2e_fixed.hpp"
 #include "kernel_operator.h"
 
+// 本地定义 GM_ADDR：kernel 编译单元不能使用 utils/gm_addr.h（原因见 cheevj_kernel.cpp 同宏定义处注释）。
 #ifndef GM_ADDR
 #define GM_ADDR uint8_t *
 #endif
@@ -58,8 +59,7 @@ __global__ __aicore__ void cheevj_fixed_finalize_kernel(GM_ADDR diagonal, GM_ADD
 }
 
 void cheevj_fixed_finalize_do(GM_ADDR diagonal, GM_ADDR offDiagonal, GM_ADDR tauReal, GM_ADDR tauImag,
-                              GM_ADDR matrixReal, GM_ADDR matrixImag, GM_ADDR bounds, GM_ADDR info, int n,
-                              void *stream)
+                              GM_ADDR matrixReal, GM_ADDR matrixImag, GM_ADDR bounds, GM_ADDR info, int n, void *stream)
 {
     cheevj_fixed_finalize_kernel<<<kFinalizeBlocks, nullptr, stream>>>(diagonal, offDiagonal, tauReal, tauImag,
                                                                        matrixReal, matrixImag, bounds, info, n);

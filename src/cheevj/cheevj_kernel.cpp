@@ -27,8 +27,12 @@
 #define CHEEVJ_ENABLE_STAGE_PANEL_UPDATE
 #include "kernel/jacobi.hpp"
 
+// kernel 编译单元不可 include utils/gm_addr.h：CCE tikcfw 内置
+// #define GM_ADDR __gm__ uint8_t*（带地址空间标注），与公共头的
+// plain define 冲突（expected unqualified-id）。kernel 侧各文件本地
+// 定义为有意为之，勿收敛到公共头；host 侧才使用 gm_addr.h。
 #ifndef GM_ADDR
-#define GM_ADDR uint8_t *
+#define GM_ADDR uint8_t*
 #endif
 
 namespace
@@ -132,7 +136,7 @@ __global__ __aicore__ void cheevj_kernel(GM_ADDR sync, GM_ADDR a, GM_ADDR w, GM_
     KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_MIX_AIC_1_2);
     SetSyncBaseAddr((unsigned long)sync);
 
-    auto tilingData = reinterpret_cast<__gm__ uint32_t *>(tiling);
+    auto tilingData = reinterpret_cast<__gm__ uint32_t*>(tiling);
     const int n = static_cast<int>(tilingData[CHEEVJ_TILING_N]);
     const int jobz = static_cast<int>(tilingData[CHEEVJ_TILING_JOBZ]);
     const bool isDiagonal = tilingData[CHEEVJ_TILING_IS_DIAGONAL] != 0;
@@ -156,7 +160,7 @@ __global__ __aicore__ void cheevj_kernel(GM_ADDR sync, GM_ADDR a, GM_ADDR w, GM_
 }
 
 void cheevj_kernel_do(GM_ADDR sync, GM_ADDR a, GM_ADDR w, GM_ADDR info, GM_ADDR workspace, GM_ADDR tiling,
-                      uint32_t numBlocks, void *stream)
+                      uint32_t numBlocks, void* stream)
 {
     cheevj_kernel<<<numBlocks, nullptr, stream>>>(sync, a, w, info, workspace, tiling);
 }
@@ -416,7 +420,7 @@ void cheevj_fixed_kernel_do(GM_ADDR matrixReal, GM_ADDR matrixImag, GM_ADDR pack
                             GM_ADDR reflectorImag, GM_ADDR bounds, GM_ADDR eigenvalues, GM_ADDR lowWorkspace,
                             GM_ADDR highWorkspace, GM_ADDR tridiagonalEigenvectorsRowMajor, GM_ADDR commandWorkspace,
                             GM_ADDR eigenvectorReal, GM_ADDR eigenvectorImag, GM_ADDR info, int n, bool computeVectors,
-                            void *stream)
+                            void* stream)
 {
     if (!IsFixedShape(n))
     {
@@ -430,11 +434,10 @@ void cheevj_fixed_kernel_do(GM_ADDR matrixReal, GM_ADDR matrixImag, GM_ADDR pack
         cheevj_fixed_prepare_kernel<<<kPrepareBlocks, nullptr, stream>>>(
             matrixReal, matrixImag, packedReal, packedImag, panelVReal, panelVImag, panelWReal, panelWImag, wHReal,
             wHImag, wHImagNeg, updateReal, updateImag, panelWorkspace, barrierWorkspace, panelStart, n);
-        cheevj_fixed_panel_do(
-            packedReal, packedImag, panelVReal, panelVImag, panelWReal, panelWImag, wHReal, wHImag, wHImagNeg,
-            diagonal + panelStart * floatBytes, offDiagonal + panelStart * floatBytes,
-            tauReal + panelStart * floatBytes, tauImag + panelStart * floatBytes, panelWorkspace, barrierWorkspace, n,
-            n - panelStart, stream);
+        cheevj_fixed_panel_do(packedReal, packedImag, panelVReal, panelVImag, panelWReal, panelWImag, wHReal, wHImag,
+                              wHImagNeg, diagonal + panelStart * floatBytes, offDiagonal + panelStart * floatBytes,
+                              tauReal + panelStart * floatBytes, tauImag + panelStart * floatBytes, panelWorkspace,
+                              barrierWorkspace, n, n - panelStart, stream);
         if (computeVectors && n == kN512)
         {
             cheevj_fixed_archive_kernel<<<panelSize, nullptr, stream>>>(panelVReal, panelVImag, reflectorReal,

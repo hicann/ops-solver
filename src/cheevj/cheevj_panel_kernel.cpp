@@ -16,6 +16,7 @@
 #include "kernel/cheevj_householder_fixed.hpp"
 #include "kernel_operator.h"
 
+// 本地定义 GM_ADDR：kernel 编译单元不能使用 utils/gm_addr.h（原因见 cheevj_kernel.cpp 同宏定义处注释）。
 #ifndef GM_ADDR
 #define GM_ADDR uint8_t *
 #endif
@@ -65,8 +66,8 @@ __global__ __aicore__ void cheevj_fixed_panel_kernel(GM_ADDR packedReal, GM_ADDR
 }
 
 void cheevj_fixed_panel_do(GM_ADDR packedReal, GM_ADDR packedImag, GM_ADDR panelVReal, GM_ADDR panelVImag,
-                           GM_ADDR panelWReal, GM_ADDR panelWImag, GM_ADDR wHReal, GM_ADDR wHImag,
-                           GM_ADDR wHImagNeg, GM_ADDR diagonal, GM_ADDR offDiagonal, GM_ADDR tauReal, GM_ADDR tauImag,
+                           GM_ADDR panelWReal, GM_ADDR panelWImag, GM_ADDR wHReal, GM_ADDR wHImag, GM_ADDR wHImagNeg,
+                           GM_ADDR diagonal, GM_ADDR offDiagonal, GM_ADDR tauReal, GM_ADDR tauImag,
                            GM_ADDR panelWorkspace, GM_ADDR barrierWorkspace, int n, int activeN, void *stream)
 {
     const uint32_t panelBlocks = n == kN1024 ? kN1024PanelBlocks : kPanelBlocks;

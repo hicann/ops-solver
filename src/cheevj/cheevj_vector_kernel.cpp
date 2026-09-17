@@ -17,13 +17,14 @@
 #include "kernel/cheevj_tridiag_inverse.hpp"
 #include "kernel_operator.h"
 
+// 本地定义 GM_ADDR：kernel 编译单元不能使用 utils/gm_addr.h（原因见 cheevj_kernel.cpp 同宏定义处注释）。
 #ifndef GM_ADDR
 #define GM_ADDR uint8_t *
 #endif
 
 __global__ __aicore__ void cheevj_fixed_tridiag_inverse_kernel(GM_ADDR diagonal, GM_ADDR offDiagonal,
-                                                               GM_ADDR eigenvalues, GM_ADDR eigenvectors,
-                                                               int waveStart, int n)
+                                                               GM_ADDR eigenvalues, GM_ADDR eigenvectors, int waveStart,
+                                                               int n)
 {
     KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_AIV_ONLY);
 #ifdef __DAV_C220_VEC__

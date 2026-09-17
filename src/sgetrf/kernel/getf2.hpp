@@ -13,6 +13,9 @@
  * \brief
  */
 
+#ifndef SGETRF_GETF2_HPP_
+#define SGETRF_GETF2_HPP_
+
 #include <lib/matrix/matmul/matmul.h>
 
 #include <cstdint>
@@ -557,3 +560,5 @@ class SwapRows
         AscendC::WaitFlag<AscendC::HardEvent::MTE3_MTE2>(eventIDMTE3ToMTE2);
     }
 };
+
+#endif

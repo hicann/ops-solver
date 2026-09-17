@@ -16,6 +16,7 @@
 #include "kernel/cheevj_jobzv_assembly.hpp"
 #include "kernel_operator.h"
 
+// 本地定义 GM_ADDR：kernel 编译单元不能使用 utils/gm_addr.h（原因见 cheevj_kernel.cpp 同宏定义处注释）。
 #ifndef GM_ADDR
 #define GM_ADDR uint8_t *
 #endif
@@ -28,10 +29,10 @@ constexpr int kN2048 = 2048;
 constexpr uint32_t kBacktransformBlocks = 32;
 }  // namespace
 
-__global__ __aicore__ void cheevj_fixed_backtransform_kernel(GM_ADDR tridiagonalEigenvectors,
-                                                             GM_ADDR reflectorReal, GM_ADDR reflectorImag,
-                                                             GM_ADDR tauReal, GM_ADDR tauImag, GM_ADDR eigenvectorReal,
-                                                             GM_ADDR eigenvectorImag, GM_ADDR info, int n)
+__global__ __aicore__ void cheevj_fixed_backtransform_kernel(GM_ADDR tridiagonalEigenvectors, GM_ADDR reflectorReal,
+                                                             GM_ADDR reflectorImag, GM_ADDR tauReal, GM_ADDR tauImag,
+                                                             GM_ADDR eigenvectorReal, GM_ADDR eigenvectorImag,
+                                                             GM_ADDR info, int n)
 {
     KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_AIV_ONLY);
 #ifdef __DAV_C220_VEC__

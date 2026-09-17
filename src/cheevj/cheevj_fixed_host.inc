@@ -233,7 +233,7 @@ FixedPanelSlices TakeFixedPanelSlices(uint8_t* workspace, const FixedWorkspaceSi
 void PackComplexPlanes(const std::vector<Complex>& packed, int64_t n, std::vector<float>* real,
                        std::vector<float>* imag)
 {
-#pragma omp parallel for if (n >= 512) num_threads(16) schedule(static)
+#pragma omp parallel for if (n >= HOST_OMP_PARALLEL_MIN_N * 2) num_threads(HOST_OMP_THREAD_NUM) schedule(static)
     for (int64_t col = 0; col < n; ++col)
     {
         for (int64_t row = 0; row < n; ++row)
@@ -249,7 +249,7 @@ void PackComplexPlanes(const std::vector<Complex>& packed, int64_t n, std::vecto
 void UnpackComplexPlanes(const std::vector<float>& real, const std::vector<float>& imag,
                          std::vector<Complex>* packed, int64_t n)
 {
-#pragma omp parallel for if (n >= 512) num_threads(16) schedule(static)
+#pragma omp parallel for if (n >= HOST_OMP_PARALLEL_MIN_N * 2) num_threads(HOST_OMP_THREAD_NUM) schedule(static)
     for (int64_t col = 0; col < n; ++col)
     {
         for (int64_t row = 0; row < n; ++row)
