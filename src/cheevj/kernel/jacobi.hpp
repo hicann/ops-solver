@@ -102,7 +102,9 @@ __aicore__ inline bool IsVectorMode(int jobz)
 
 __aicore__ inline bool IsLowerMode(int uplo)
 {
-    return uplo == 0 || uplo == static_cast<int>('L') || uplo == static_cast<int>('l') || uplo == 122;
+    // 与 host 侧 IsLowerMode 口径一致：仅接受枚举与 'L'/'l'，不收 121/122 魔数
+    // （122=Lower 的历史映射与 PLASMA/MAGMA 相反，issue #155）
+    return uplo == 0 || uplo == static_cast<int>('L') || uplo == static_cast<int>('l');
 }
 
 class CheevjDeviceKernel

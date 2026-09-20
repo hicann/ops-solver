@@ -105,14 +105,17 @@ bool IsNoVectorMode(int32_t jobz)
 
 bool IsLowerMode(int32_t uplo)
 {
-    return uplo == ACLSOLVER_FILL_MODE_LOWER || uplo == static_cast<int32_t>('L') ||
-           uplo == static_cast<int32_t>('l') || uplo == 122;
+    // 仅接受公开枚举与 'L'/'l'：不引入 121/122（PLASMA/MAGMA 数值编码）——
+    // 若误收易与 'y'/'z' 字符值混淆，且历史代码 122=Lower 的映射与 PLASMA/
+    // MAGMA（121=Lower/122=Upper）方向相反，遵循该惯例的调用方会被按错误
+    // 三角形读取而静默出错（issue #155）。如需兼容该编码须整体修正映射并
+    // 在公开头文件文档化，当前不引入。
+    return uplo == ACLSOLVER_FILL_MODE_LOWER || uplo == static_cast<int32_t>('L') || uplo == static_cast<int32_t>('l');
 }
 
 bool IsUpperMode(int32_t uplo)
 {
-    return uplo == ACLSOLVER_FILL_MODE_UPPER || uplo == static_cast<int32_t>('U') ||
-           uplo == static_cast<int32_t>('u') || uplo == 121;
+    return uplo == ACLSOLVER_FILL_MODE_UPPER || uplo == static_cast<int32_t>('U') || uplo == static_cast<int32_t>('u');
 }
 
 int64_t AlignUp(int64_t value, int64_t align) { return align > 0 ? (value + align - 1) / align * align : value; }
@@ -1504,7 +1507,10 @@ DispatchResult TrySmallHostInput(Complex* a, int64_t lda, int64_t n, int32_t upl
     std::vector<Complex> hostMatrix;
     PackFullMatrix(a, lda, n, uploValue, &hostMatrix);
     const bool converged = SolveCompactHostJacobi(&hostMatrix, n, computeVectors, w);
-    if (computeVectors)
+    // 未收敛（info=1）时不回写用户输入 a，保留原始矩阵供调用方重试/诊断——
+    // 与 TryWideScaleInput 的门控语义一致（issue #159：三条 host 回退路径
+    // 的 a 回写契约统一为"仅收敛时回写特征向量"）
+    if (computeVectors && converged)
     {
         ScatterFullMatrix(hostMatrix, lda, n, a);
     }

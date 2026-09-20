@@ -129,19 +129,8 @@ aclError CgetriBatchedImpl(aclsolverHandle_t handle, const int64_t n, std::compl
     // 求逆结果静默错误，故必须固定使用 LU_MAX_NUM_BLOCKS（issue #147）
     const uint32_t numBlocks = LU_MAX_NUM_BLOCKS;
 
-    SOLVER_ECHECK(
-        n > 0 && batchSize > 0 && lda > 0 && lda_inv > 0 && A != nullptr && Ainv != nullptr && info != nullptr,
-        "CgetriBatched get invalid param: n, batchSize, lda, lda_inv <= 0, or A, Ainv, info is nullptr.",
-        ACL_ERROR_INVALID_PARAM);
-    SOLVER_ECHECK(n <= MAX_MATRIX_SHAPE && batchSize <= MAX_MATRIX_BATCH,
-                  "CgetriBatched get n > 256 or batchSize > 3000, which exceeds the supported limit.",
-                  ACL_ERROR_INVALID_PARAM);
-    SOLVER_ECHECK(n >= MATRIX_SHAPE_LIMIT,
-                  "CgetriBatched only supports n >= 32. For n < 32, use "
-                  "CmatinvBatched instead.",
-                  ACL_ERROR_INVALID_PARAM);
-    SOLVER_ECHECK(lda == n && lda_inv == n, "CgetriBatched only supports lda == n and lda_inv == n in current version.",
-                  ACL_ERROR_INVALID_PARAM);
+    // 参数校验已由外层 aclsolverCgetriBatched 在 staging 估算前单点完成（issue #139/#158），
+    // 此处不再重复：同一文案双点维护一旦只改其一即产生口径漂移。
 
     int64_t M = n;
     int64_t N = n;

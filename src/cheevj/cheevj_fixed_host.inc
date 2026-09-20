@@ -150,12 +150,23 @@ struct FixedWorkspaceSizes
     size_t sixPlaneBytes;
 };
 
+// panel 工作区布局为 host/kernel 双编译域共用契约（issue #160）：
+//   kernel 侧 cheevj_e2e_fixed.hpp 以 4*panelSize*MatrixN + 2*MatrixN 消费，
+//   panelSize 按形状取 512->4 / 1024->8 / 2048->16（cheevj_e2e_fixed.hpp:104）。
+// CHEEVJ_FIXED_PANEL_SIZE=16 是 panelSize 的全形状上界，二者经下方 static_assert
+// 绑定；kernel 侧 panelSize 或布局公式上调时必须同步提高本常量，否则编译期即失败，
+// 杜绝 host 欠分配导致的设备越界写静默发生。
+static_assert(CHEEVJ_FIXED_PANEL_SIZE == 16,
+              "panel workspace size must stay >= kernel-side panelSize max (2048 shape) "
+              "and match the 4*SIZE*n+2*n layout consumed by cheevj_e2e_fixed.hpp (issue #160)");
+
 FixedWorkspaceSizes GetFixedWorkspaceSizes(int64_t n)
 {
     constexpr int64_t barrierElems = CHEEVJ_FIXED_PANEL_PARTICIPANTS * 16;
     constexpr int64_t boundsElems = 8;
     const int64_t matrixElems = n * n;
     const int64_t panelElems = n * CHEEVJ_FIXED_PANEL_WIDTH;
+    // 布局公式与 kernel 侧 cheevj_e2e_fixed.hpp:130 逐项对应（issue #160）
     const int64_t panelWorkspaceElems = 4 * CHEEVJ_FIXED_PANEL_SIZE * n + 2 * n;
     const size_t matrixBytes = static_cast<size_t>(matrixElems) * sizeof(float);
     return {matrixElems,

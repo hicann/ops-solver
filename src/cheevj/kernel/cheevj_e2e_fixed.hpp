@@ -101,6 +101,9 @@ class CheevjE2EPreparePacked
     __aicore__ inline void Process()
     {
 #ifdef __DAV_C220_VEC__
+        // panelSize 按形状取值，须满足 host 侧分配上界 CHEEVJ_FIXED_PANEL_SIZE=16
+        // （cheevj_fixed_host.inc 经 static_assert 绑定，issue #160）；
+        // 布局消费公式 4*panelSize*MatrixN + 2*MatrixN 与 host 分配公式逐项对应
         constexpr int panelSize = MatrixN == 512 ? 4 : (MatrixN == 2048 ? 16 : 8);
         constexpr int barrierInts = MatrixN == 512 ? 33 * 8 : 33 * 16;
         if (start < 0 || start >= MatrixN || (start % panelSize) != 0)

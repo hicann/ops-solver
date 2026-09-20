@@ -24,12 +24,18 @@
 static constexpr size_t EYE_FLOATS_PER_REAL_ELEMENT = 1;
 static constexpr size_t EYE_FLOATS_PER_COMPLEX_ELEMENT = 2;
 
-// 初始化 eye 缓冲区为单位阵（对角 1，其余 0），floatsPerElement 为每元素的 float 分量数，
-// 初始化失败（memset_s 非 EOK）返回 false
-// 初始化 eye 缓冲区为单位阵（对角 1，其余 0），floatsPerElement 为每元素的 float 分量数。
-// paddedRows 为缓冲的完整行数（行对齐 + padding 行）：清零范围必须覆盖整个缓冲，
-// 否则 padding 行携带宿主未初始化内存被整体 H2D 上设备（issue #136）。
-// 初始化失败（memset_s 非 EOK）返回 false
+// 初始化 eye 缓冲区首个"单 float 平面"为单位阵（对角 1，其余 0）。
+//
+// floatsPerElement 仅用于计算清零字节数（本函数写入的平面所在的整体缓冲按
+// fpe 放大，fpe=1 实数 / fpe=2 复数平面分离布局），**不参与对角偏移**：
+// 本函数产出的平面是单 float 布局（行宽 strideN 个 float），与 kernel 消费
+// 口径一致——trsm/restore 均按"实部平面 + 偏移 M*strideN 的虚部平面"两个
+// 独立单 float 平面访问（trsm_custom.hpp: lGlobalImag = lGlobalReal[M*strideN]），
+// 不存在交错复数布局的调用方；若未来引入交错布局，须另行实现对角偏移乘
+// fpe 的变体，勿直接复用本函数（issue #156）。
+// paddedRows 为缓冲的完整行数（行对齐 + padding 行）：清零范围覆盖 zeroRows
+// 行 × fpe，与调用方传入的缓冲大小一致。
+// 初始化失败（memset_s 非 EOK）返回 false。
 inline bool GenerateEyeMatrix(int64_t N, int64_t strideN, int64_t paddedRows, uint8_t *eyeBuf, size_t floatsPerElement)
 {
     auto buf = reinterpret_cast<float *>(eyeBuf);
