@@ -31,9 +31,8 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.18)
     set_property(SOURCE
         ${CMAKE_SOURCE_DIR}/src/cheevj/cheevj_host.cpp
         TARGET_DIRECTORY ${OPS_SOLVER}
-        PROPERTY COMPILE_OPTIONS "-O3;-fopenmp"
+        PROPERTY COMPILE_OPTIONS "-O3"
     )
-    target_link_libraries(${OPS_SOLVER} PRIVATE omp)
 endif()
 
 target_include_directories(cheevj_test PRIVATE

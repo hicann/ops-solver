@@ -57,6 +57,12 @@ Self-extractable archive "cann-950-ops-solver_9.0.0_linux-x86_64.run" successful
 
 以cmatinv_batched算子为例，运行该样例验证算子功能是否正常。
 
+运行样例前，需先准备测试数据。测试程序从`./test/cmatinv_batched/data/input/A_gm.bin`读取输入数据，请在项目根目录执行以下命令生成（`<n>`为矩阵阶数，`<batchSize>`为批量大小，需与测试用例的调用参数保持一致）：
+
+```bash
+python3 test/cmatinv_batched/data/gen_data.py <n> <batchSize>
+```
+
 ```bash
 bash build.sh --soc=ascend950 --ops=cmatinv_batched --run
 ```
