@@ -345,9 +345,8 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockN, int tileM, GM_A
 #endif
 }
 
-__global__ __aicore__ void sgetrf_kernel(GM_ADDR sync, int orgM, int orgN, int blockN, int tileM, GM_ADDR A_org,
-                                         GM_ADDR A_work, GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm,
-                                         GM_ADDR gather2_gm)
+__global__ __aicore__ void sgetrf_kernel(GM_ADDR sync, int orgM, int orgN, int blockN, int tileM, GM_ADDR A_org, GM_ADDR A_work,
+                                         GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm)
 {
     KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_MIX_AIC_1_2);
     custom_lu(orgM, orgN, blockN, tileM, A_org, A_work, W, work_gm, gather1_gm, gather2_gm);
@@ -356,7 +355,7 @@ __global__ __aicore__ void sgetrf_kernel(GM_ADDR sync, int orgM, int orgN, int b
 void sgetrf_kernel_do(GM_ADDR sync, int orgM, int orgN, int blockN, int tileM, GM_ADDR A_org, GM_ADDR A_work, GM_ADDR W,
                       GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm, uint32_t numBlocks, void *stream)
 {
-    sgetrf_kernel<<<numBlocks, nullptr, stream>>>(sync, orgM, orgN, blockN, tileM, A_org, A_work, W, work_gm,
-                                                  gather1_gm, gather2_gm);
+    sgetrf_kernel<<<numBlocks, nullptr, stream>>>(sync, orgM, orgN, blockN, tileM, A_org, A_work, W, work_gm, gather1_gm,
+                                                  gather2_gm);
 }
 #endif  // SGETRF_MIX_H

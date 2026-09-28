@@ -27,7 +27,9 @@
 using namespace AscendC;
 using namespace matmul;
 
-#define ceil(x, y) (((x) + (y) - 1) / (y) * (y))
+#ifndef LU_CEIL_ALIGN
+#define LU_CEIL_ALIGN(x, y) (((x) + (y) - 1) / (y) * (y))
+#endif
 
 template <typename T>
 class GTRF2Solver

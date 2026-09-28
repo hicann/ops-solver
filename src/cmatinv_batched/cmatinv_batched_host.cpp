@@ -128,6 +128,12 @@ CmatinvBatchedTilingData CalTilingData(uint32_t vecCoreNum, uint32_t dtype, uint
 aclError aclsolverCmatinvBatched(aclsolverHandle_t handle, const int64_t n, std::complex<float> *A, const int64_t lda,
                                  std::complex<float> *Ainv, const int64_t lda_inv, int32_t *info, int64_t batchSize)
 {
+    // info 遵循 LAPACK 语义（issue #164）：成功为 0，参数错误由下方 ECHECK 以负值
+    // 语义返回（aclError）；奇异信息见各 kernel 主元哨兵约定
+    if (info != nullptr)
+    {
+        *info = 0;
+    }
     aclrtStream stream = nullptr;
     if (handle != nullptr)
     {

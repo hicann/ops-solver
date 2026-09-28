@@ -27,7 +27,9 @@
 using namespace AscendC;
 using namespace matmul;
 
-#define ceil(x, y) (((x) + (y) - 1) / (y) * (y))
+#ifndef LU_CEIL_ALIGN
+#define LU_CEIL_ALIGN(x, y) (((x) + (y) - 1) / (y) * (y))
+#endif
 
 template <typename T>
 class GTRF2Solver
@@ -63,7 +65,7 @@ class GTRF2Solver
         this->aGlobalReal = aGlobalReal;
         this->aGlobalImag = aGlobalImag;
         this->workGlobalReal = workGlobal;
-        this->workGlobalImag = workGlobal[ceil(M, 512) * blockN];
+        this->workGlobalImag = workGlobal[LU_CEIL_ALIGN(M, 512) * blockN];
         this->wGlobal = wGlobal;
         this->gather1 = gather1;
         this->gather2 = gather2;

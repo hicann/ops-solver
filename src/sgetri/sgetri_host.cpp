@@ -33,6 +33,12 @@ extern void sgetri_kernel_do(GM_ADDR sync, int orgM, int orgN, int blockM, int b
 
 aclError aclsolverSgetri(aclsolverHandle_t handle, const int64_t n, float *A, const int64_t lda, int32_t *info)
 {
+    // info 遵循 LAPACK 语义（issue #164）：成功为 0，参数错误由下方 ECHECK 以负值
+    // 语义返回（aclError）；奇异信息见各 kernel 主元哨兵约定
+    if (info != nullptr)
+    {
+        *info = 0;
+    }
     SOLVER_ECHECK(n > 0 && lda > 0 && A != nullptr && info != nullptr,
                   "aclsolverSgetri invalid param: n, lda <= 0, or A, info is nullptr.", ACL_ERROR_INVALID_PARAM);
     SOLVER_ECHECK(n <= INT32_MAX, "aclsolverSgetri invalid param: n exceeds int32 range.", ACL_ERROR_INVALID_PARAM);

@@ -87,8 +87,12 @@ check_install_path() {
 # makeself 可能将 run 文件路径作为第一个参数传入，需跳过
 get_opts() {
   while [ $# -gt 0 ]; do
-    # 跳过 makeself 传入的路径参数（如 --./xxx.run、--/path/to/dir、./xxx.run）
-    if [[ "$1" == *".run"* ]] || [[ "$1" == ./* ]] || [[ "$1" == /* ]] || [[ "$1" == --./* ]] || [[ "$1" == --/* ]]; then
+    # 跳过 makeself 传入的 run 文件路径参数。跳过条件必须锚定"以 .run 结尾"或
+    # "以路径前缀开头的 run 文件形态"，不能对任意位置做 *".run"* 子串匹配——
+    # 否则形如 --install-path=/data/x.run_env 的键值参数（值恰含 .run 子串）
+    # 会被整体吞掉，用户安装路径被静默丢弃回落默认路径（issue #163）。
+    if [[ "$1" == *.run ]] || [[ "$1" == ./*.run ]] || [[ "$1" == --./*.run ]] || \
+       [[ "$1" == --.*.run ]] || [[ "$1" == --/*.run ]]; then
       shift
       continue
     fi

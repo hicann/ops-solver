@@ -29,7 +29,9 @@ using namespace matmul;
 
 #define MAX(a, b) ((a) >= (b) ? (a) : (b))
 #define MIN(a, b) ((a) <= (b) ? (a) : (b))
-#define ceil(x, y) (((x) + (y) - 1) / (y) * (y))
+#ifndef LU_CEIL_ALIGN
+#define LU_CEIL_ALIGN(x, y) (((x) + (y) - 1) / (y) * (y))
+#endif
 
 template <typename T>
 class SolveTrsmUpper
@@ -146,7 +148,7 @@ __aicore__ inline void custom_trsm_upper(TBufPool<TPosition::VECCALC, 16> &tbufP
 
     lGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ float *>(L));
 
-    int block_n = ceil((N + blockNum - 1) / blockNum, 64);
+    int block_n = LU_CEIL_ALIGN((N + blockNum - 1) / blockNum, 64);
     int trsmOffsetN = block_n * coreIdx;
     int realBlockN = min(N - trsmOffsetN, block_n);
 

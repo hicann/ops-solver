@@ -27,7 +27,9 @@
 using namespace AscendC;
 using namespace matmul;
 
-#define ceil(x, y) (((x) + (y) - 1) / (y) * (y))
+#ifndef LU_CEIL_ALIGN
+#define LU_CEIL_ALIGN(x, y) (((x) + (y) - 1) / (y) * (y))
+#endif
 
 template <typename T>
 class SplitRealImag
@@ -209,10 +211,10 @@ class MergeRealImag
         this->aGlobalReal = aGlobalReal;
         this->aGlobalImag = aGlobalImag;
         this->N = N;
-        this->alignedN = ceil(N, elementsPerBlock);
+        this->alignedN = LU_CEIL_ALIGN(N, elementsPerBlock);
         this->srcN = srcN;
         this->dstN = dstN;
-        linesPerIter = max(1, TILE_LENGTH / ceil(dstN, 16) / 2);
+        linesPerIter = max(1, TILE_LENGTH / LU_CEIL_ALIGN(dstN, 16) / 2);
     }
     __aicore__ inline void MergeRealImagWork(int M, int p, int id)
     {
@@ -315,7 +317,8 @@ class GTRF2Solver
         this->aGlobalReal = aGlobalReal;
         this->aGlobalImag = aGlobalImag;
         this->workGlobalReal = workGlobal;
-        this->workGlobalImag = workGlobal[ceil(M, 512) * blockN];
+        // work 虚平面基址按 int64 展开（issue #166）
+        this->workGlobalImag = workGlobal[static_cast<int64_t>(LU_CEIL_ALIGN(M, 512)) * blockN];
         this->wGlobal = wGlobal;
         this->gather1 = gather1;
         this->gather2 = gather2;
@@ -427,9 +430,14 @@ class GTRF2Solver
 __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int tileM, GM_ADDR A_org, GM_ADDR A_work,
                                  GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm, GM_ADDR gather3_gm)
 {
+    // 平面尺寸用 int64：host 允许 m*n 远超 int32（详见 cgetrf_host 的规模校验），
+    // strideN*M 类平面基址偏移若按 int 计算会回绕为负偏移（issue #166）。
+    // M/N/strideN 本身受 host 校验上界约束仍在 int32 范围，保持 int 以匹配
+    // kernel 内其余索引算术；仅平面基址按 int64 展开。
     int M = (orgM + 15) / 16 * 16;
     int strideN = (orgN + 127) / 128 * 128;
     int N = (orgN + 15) / 16 * 16;
+    const int64_t planeStride = static_cast<int64_t>(strideN) * M;
     int blockNum = GetBlockNum();
     int blockIdx = GetBlockIdx();
     int coreIdx = blockIdx;
@@ -454,8 +462,10 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
     aGlobalOrg.SetGlobalBuffer(reinterpret_cast<__gm__ float *>(A_org));
     aGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ float *>(A_work));
     aGlobalReal = aGlobal;
-    aGlobalImag = aGlobalReal[strideN * M];
-    aGlobalImagNeg = aGlobalReal[strideN * M * 2];
+    // 平面基址偏移按 int64 计算（issue #166）：strideN*M 与 strideN*M*2 在
+    // m*n 较大时超 int32 回绕为负偏移
+    aGlobalImag = aGlobalReal[planeStride];
+    aGlobalImagNeg = aGlobalReal[planeStride * 2];
     wGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ uint32_t *>(W));
     workGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ float *>(work_gm));
     gather1.SetGlobalBuffer(reinterpret_cast<__gm__ uint32_t *>(gather1_gm));
@@ -518,7 +528,7 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
             if (~swapIdx && swapIdx < 8)
             {
                 int swapTotalN = offset / limK * limK + limK - offset;
-                int swapBlockN = ceil(swapTotalN / 8, 1024);
+                int swapBlockN = LU_CEIL_ALIGN(swapTotalN / 8, 1024);
                 int swapOffsetN = swapBlockN * swapIdx;
                 int realBlockN = max(0, min(swapBlockN, swapTotalN - swapOffsetN));
                 for (int j = offset - blockN; j < offset; ++j)
@@ -539,7 +549,7 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
                     swapTotalN += limK;
                     swapOffset -= limK;
                 }
-                int swapBlockN = ceil(swapTotalN / 8, 1024);
+                int swapBlockN = LU_CEIL_ALIGN(swapTotalN / 8, 1024);
                 int swapOffsetN = swapBlockN * (swapIdx - 8);
                 int realBlockN = min(swapBlockN, swapTotalN - swapOffsetN);
                 if (realBlockN > 0)
@@ -560,7 +570,7 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
             int trsmTotalN = min(N - offset, limK - offset % limK);
             int trsmM = blockM;
             int trsmBlocks = blockNum - 4;
-            int trsmBlockN = ceil((trsmTotalN + trsmBlocks - 1) / trsmBlocks, 128);
+            int trsmBlockN = LU_CEIL_ALIGN((trsmTotalN + trsmBlocks - 1) / trsmBlocks, 128);
             int trsmOffsetN = trsmBlockN * (coreIdx - 4);
             int realBlockN = min(trsmTotalN - trsmOffsetN, trsmBlockN);
             if (coreIdx >= 4 && realBlockN > 0)
@@ -578,7 +588,7 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
             int trsmTotalN = N - offset;
             int trsmM = limK;
             int trsmBlocks = blockNum - 4;
-            int trsmBlockN = ceil((trsmTotalN + trsmBlocks - 1) / trsmBlocks, 128);
+            int trsmBlockN = LU_CEIL_ALIGN((trsmTotalN + trsmBlocks - 1) / trsmBlocks, 128);
             int trsmOffsetN = trsmBlockN * (coreIdx - 4);
             int realBlockN = min(trsmTotalN - trsmOffsetN, trsmBlockN);
             if (coreIdx >= 4 && realBlockN > 0)
@@ -629,7 +639,7 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
                 {
                     int swapOffset = offset / limK * limK + limK;
                     int swapTotalN = N - swapOffset;
-                    int swapBlockN = ceil(swapTotalN / 8, 1024);
+                    int swapBlockN = LU_CEIL_ALIGN(swapTotalN / 8, 1024);
                     int swapOffsetN = swapBlockN * swapIdx;
                     int realBlockN = max(0, min(swapBlockN, swapTotalN - swapOffsetN));
                     for (int j = startIndex; j < endIndex; ++j)
@@ -657,7 +667,7 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
                 {
                     int swapOffset = offset / limK * limK + limK;
                     int swapTotalN = N - swapOffset;
-                    int swapBlockN = ceil(swapTotalN / 8, 1024);
+                    int swapBlockN = LU_CEIL_ALIGN(swapTotalN / 8, 1024);
                     int swapOffsetN = swapBlockN * swapIdx;
                     int realBlockN = max(0, min(swapBlockN, swapTotalN - swapOffsetN));
                     for (int j = startIndex; j < endIndex; ++j)
@@ -670,7 +680,7 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
                 if (~swapIdx && swapIdx >= 8)
                 {
                     int swapTotalN = offset / limK * limK;
-                    int swapBlockN = ceil(swapTotalN / 8, 1024);
+                    int swapBlockN = LU_CEIL_ALIGN(swapTotalN / 8, 1024);
                     int swapOffsetN = swapBlockN * (swapIdx - 8);
                     int realBlockN = min(swapBlockN, swapTotalN - swapOffsetN);
                     if (realBlockN > 0)
@@ -701,7 +711,7 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
         {  // swaps from last big block to next big block
             int swapOffset = t / limK * limK + limK;
             int swapTotalN = N - swapOffset;
-            int swapBlockN = ceil(swapTotalN / 8, 1024);
+            int swapBlockN = LU_CEIL_ALIGN(swapTotalN / 8, 1024);
             int swapOffsetN = swapBlockN * swapIdx;
             int realBlockN = min(swapBlockN, swapTotalN - swapOffsetN);
             if (realBlockN > 0)
@@ -727,7 +737,7 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
         if (~swapIdx && swapIdx >= 8)
         {  // swaps from last big block to prev big block
             int swapTotalN = t / limK * limK;
-            int swapBlockN = ceil(swapTotalN / 8, 1024);
+            int swapBlockN = LU_CEIL_ALIGN(swapTotalN / 8, 1024);
             int swapOffsetN = swapBlockN * (swapIdx - 8);
             int realBlockN = min(swapBlockN, swapTotalN - swapOffsetN);
             if (realBlockN > 0)
@@ -745,7 +755,7 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
         if (~swapIdx && swapIdx < 8)
         {  // swaps from last small block to next small blocks
             int swapTotalN = min(t / limK * limK + limK - t, N - t);
-            int swapBlockN = ceil(swapTotalN / 8, 1024);
+            int swapBlockN = LU_CEIL_ALIGN(swapTotalN / 8, 1024);
             int swapOffsetN = swapBlockN * swapIdx;
             int realBlockN = max(0, min(swapBlockN, swapTotalN - swapOffsetN));
             for (int j = t - blockN; j < min(orgM, orgN); ++j)
@@ -766,7 +776,7 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
                 swapTotalN += limK;
                 swapOffset -= limK;
             }
-            int swapBlockN = ceil(swapTotalN / 8, 1024);
+            int swapBlockN = LU_CEIL_ALIGN(swapTotalN / 8, 1024);
             int swapOffsetN = swapBlockN * (swapIdx - 8);
             int realBlockN = min(swapBlockN, swapTotalN - swapOffsetN);
             if (realBlockN > 0)
@@ -790,7 +800,7 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
             int trsmTotalN = N - M;
             int trsmM = blockM;
             int trsmBlocks = blockNum - 4;
-            int trsmBlockN = ceil((trsmTotalN + trsmBlocks - 1) / trsmBlocks, 64);
+            int trsmBlockN = LU_CEIL_ALIGN((trsmTotalN + trsmBlocks - 1) / trsmBlocks, 64);
             int trsmOffsetN = trsmBlockN * (coreIdx - 4);
             int realBlockN = min(trsmTotalN - trsmOffsetN, trsmBlockN);
             if (coreIdx >= 4 && trsmOffsetN < trsmTotalN)
@@ -815,7 +825,7 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
             int trsmTotalN = N - M;
             int trsmM = limK;
             int trsmBlocks = blockNum - 4;
-            int trsmBlockN = ceil((trsmTotalN + trsmBlocks - 1) / trsmBlocks, 64);
+            int trsmBlockN = LU_CEIL_ALIGN((trsmTotalN + trsmBlocks - 1) / trsmBlocks, 64);
             int trsmOffsetN = trsmBlockN * (coreIdx - 4);
             int realBlockN = min(trsmTotalN - trsmOffsetN, trsmBlockN);
             if (coreIdx >= 4 && trsmOffsetN < trsmTotalN)
@@ -873,7 +883,7 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
             int trsmTotalN = N - offset;
             int trsmM = limK;
             int trsmBlocks = blockNum - 4;
-            int trsmBlockN = ceil((trsmTotalN + trsmBlocks - 1) / trsmBlocks, 128);
+            int trsmBlockN = LU_CEIL_ALIGN((trsmTotalN + trsmBlocks - 1) / trsmBlocks, 128);
             int trsmOffsetN = trsmBlockN * (blockIdx - 4);
             int realBlockN = min(trsmTotalN - trsmOffsetN, trsmBlockN);
             if (blockIdx >= 4 && trsmOffsetN < trsmTotalN)
@@ -894,7 +904,7 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
         {
             if (blockIdx >= gemm1BlockNum) continue;
             int gemmTotalM = M - offset;
-            int gemmBlockM = ceil((gemmTotalM + gemm1BlockNum - 1) / gemm1BlockNum, 128);
+            int gemmBlockM = LU_CEIL_ALIGN((gemmTotalM + gemm1BlockNum - 1) / gemm1BlockNum, 128);
             int gemmBlockN = min(N - offset, limK - offset % limK);
             int gemmOffsetM = gemmBlockM * blockIdx;
             int gemmRealM = min(gemmBlockM, gemmTotalM - gemmOffsetM);
@@ -966,7 +976,7 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
             int trsmTotalN = N - M;
             int trsmM = limK;
             int trsmBlocks = blockNum - 4;
-            int trsmBlockN = ceil((trsmTotalN + trsmBlocks - 1) / trsmBlocks, 64);
+            int trsmBlockN = LU_CEIL_ALIGN((trsmTotalN + trsmBlocks - 1) / trsmBlocks, 64);
             int trsmOffsetN = trsmBlockN * (blockIdx - 4);
             int realBlockN = min(trsmTotalN - trsmOffsetN, trsmBlockN);
             if (blockIdx >= 4 && trsmOffsetN < trsmTotalN)
@@ -983,17 +993,17 @@ __aicore__ inline void custom_lu(int orgM, int orgN, int blockM, int blockN, int
 #endif
 }
 
-__global__ __aicore__ void cgetrf_kernel(GM_ADDR sync, int orgM, int orgN, int blockM, int blockN, int tileM,
-                                         GM_ADDR A_org, GM_ADDR A_work, GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm,
+__global__ __aicore__ void cgetrf_kernel(GM_ADDR sync, int orgM, int orgN, int blockM, int blockN, int tileM, GM_ADDR A_org,
+                                         GM_ADDR A_work, GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm,
                                          GM_ADDR gather2_gm, GM_ADDR gather3_gm)
 {
     KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_MIX_AIC_1_2);
     custom_lu(orgM, orgN, blockM, blockN, tileM, A_org, A_work, W, work_gm, gather1_gm, gather2_gm, gather3_gm);
 }
 
-void cgetrf_kernel_do(GM_ADDR sync, int orgM, int orgN, int blockM, int blockN, int tileM, GM_ADDR A_org,
-                      GM_ADDR A_work, GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm,
-                      GM_ADDR gather3_gm, uint32_t numBlocks, void *stream)
+void cgetrf_kernel_do(GM_ADDR sync, int orgM, int orgN, int blockM, int blockN, int tileM, GM_ADDR A_org, GM_ADDR A_work, GM_ADDR W,
+                      GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm, GM_ADDR gather3_gm, uint32_t numBlocks,
+                      void *stream)
 {
     cgetrf_kernel<<<numBlocks, nullptr, stream>>>(sync, orgM, orgN, blockM, blockN, tileM, A_org, A_work, W, work_gm,
                                                   gather1_gm, gather2_gm, gather3_gm);

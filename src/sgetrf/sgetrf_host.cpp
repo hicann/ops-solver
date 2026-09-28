@@ -24,13 +24,18 @@
 #include "acl/acl.h"
 #include "cann_ops_solver.h"
 
-extern void sgetrf_kernel_do(GM_ADDR sync, int orgM, int orgN, int blockN, int tileM, GM_ADDR A_org, GM_ADDR A_work,
-                             GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm, uint32_t numBlocks,
-                             void *stream);
+extern void sgetrf_kernel_do(GM_ADDR sync, int orgM, int orgN, int blockN, int tileM, GM_ADDR A_org, GM_ADDR A_work, GM_ADDR W,
+                             GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm, uint32_t numBlocks, void *stream);
 
 aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_t n, float *A, const int64_t lda,
                          int32_t *ipiv, int32_t *info)
 {
+    // info 遵循 LAPACK 语义（issue #164）：成功为 0，参数错误由下方 ECHECK 以负值
+    // 语义返回（aclError）；奇异信息见各 kernel 主元哨兵约定
+    if (info != nullptr)
+    {
+        *info = 0;
+    }
     SOLVER_ECHECK(m > 0 && n > 0 && lda > 0 && A != nullptr && ipiv != nullptr && info != nullptr,
                   "aclsolverSgetrf invalid param: m, n, lda <= 0, or A, ipiv, info is nullptr.",
                   ACL_ERROR_INVALID_PARAM);
@@ -117,7 +122,6 @@ aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
                 cleanup());
 
     CHECK_ACLRT(aclrtGetHardwareSyncAddr((void **)&sync), cleanup());
-
     sgetrf_kernel_do(sync, m, n, blockN, tileM, aMatrixDevice, aMatrixDeviceWork, wDevice, workDevice, gatherDevice1,
                      gatherDevice2, numBlocks, stream);
     CHECK_ACLRT(aclrtSynchronizeStream(stream), cleanup());

@@ -20,7 +20,10 @@
 // 口径说明：列方向按 COL_ALIGNED(128) 对齐；行方向按 ROW_ALIGNED(16) 对齐后再追加
 // EYE_ROW_PADDING(128) 行 padding（供 kernel 的 tile 换块过渡区使用，须初始化清零，issue #136）。
 
-constexpr int64_t LU_BLOCK_N = 16;          // kernel 消元子块列宽
+constexpr int64_t LU_BLOCK_N = 16;  // kernel 消元子块列宽
+// cgetrf kernel 设计上限：虚实分离/合并单次拷入缓冲 8192 float，入口注释
+// 设计规模 192MB（issue #165），host 校验 n 不超过该值
+constexpr int64_t LU_CGETRF_MAX_N = 8192;
 constexpr int64_t LU_TILE_M = 512;          // kernel tile 行高（gather1/gather2 重排表按 tileM*blockN 布局）
 constexpr int64_t LU_ROW_ALIGNED = 16;      // 行对齐粒度
 constexpr int64_t LU_COL_ALIGNED = 128;     // strideN 列对齐粒度
@@ -68,7 +71,10 @@ inline bool GenerateGatherTables(int64_t tileM, int64_t blockN, int64_t n, int64
         if (n > 0)
         {
             // 与 kernel 消费口径一致：按 alignedN = ceil8(n) 展开偏移对；k 超出 n 的表项
-            // 落在列 padding 区，指向的有效数据由 kernel 的列裁剪保证不被消费为输出（issue #137）
+            // 落在列 padding 区，指向的有效数据由 kernel 的列裁剪保证不被消费为输出（issue #137）。
+            // n 非 8 倍数时 GATHER3_TILE_LENGTH / alignedN 不整除，表尾部会残留未初始化项；
+            // kernel 按 [i][j] 行主序、行宽 alignedN 消费整表（issue #161），必须把尾部
+            // padding 行一并填满（指向最后一行 padding 区，安全且不被列为输出消费）。
             const int64_t alignedN = (n + GATHER3_ALIGN - 1) / GATHER3_ALIGN * GATHER3_ALIGN;
             const int64_t effN = alignedN < GATHER3_TILE_LENGTH ? alignedN : GATHER3_TILE_LENGTH;
             const int64_t m = GATHER3_TILE_LENGTH / effN;
@@ -78,6 +84,14 @@ inline bool GenerateGatherTables(int64_t tileM, int64_t blockN, int64_t n, int64
                     buf[idx++] = static_cast<uint32_t>(i * effN + j) * sizeof(float);
                     buf[idx++] = static_cast<uint32_t>(i * effN + j + GATHER3_TILE_LENGTH) * sizeof(float);
                 }
+            // 补齐尾行（GATHER3_TILE_LENGTH % effN != 0 的残留项）：重复填充最后一行
+            // 的偏移（其 j >= n 部分本就落在 padding 列，kernel 列裁剪不消费为输出）
+            const int64_t remain = GATHER3_TILE_LENGTH - m * effN;
+            for (int64_t k = 0; k < remain; ++k)
+            {
+                buf[idx++] = static_cast<uint32_t>((m - 1) * effN) * sizeof(float);
+                buf[idx++] = static_cast<uint32_t>((m - 1) * effN + GATHER3_TILE_LENGTH) * sizeof(float);
+            }
         }
     }
     // 无 eye 缓冲的调用方（sgetrf/cgetrf 的 gather-only 场景）：跳过 eye 初始化

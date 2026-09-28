@@ -25,19 +25,30 @@
 #include "acl/acl.h"
 #include "cann_ops_solver.h"
 
-extern void cgetrf_kernel_do(GM_ADDR sync, int orgM, int orgN, int blockM, int blockN, int tileM, GM_ADDR A_org,
-                             GM_ADDR A_work, GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm,
-                             GM_ADDR gather3_gm, uint32_t numBlocks, void *stream);
+extern void cgetrf_kernel_do(GM_ADDR sync, int orgM, int orgN, int blockM, int blockN, int tileM, GM_ADDR A_org, GM_ADDR A_work,
+                             GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm, GM_ADDR gather3_gm,
+                             uint32_t numBlocks, void *stream);
 
 aclError aclsolverCgetrf(aclsolverHandle_t handle, const int64_t m, const int64_t n, std::complex<float> *A,
                          const int64_t lda, int32_t *ipiv, int32_t *info)
 {
+    // info 遵循 LAPACK 语义（issue #164）：成功为 0；参数错误为负；矩阵奇异
+    // （W 主元哨兵未消元）为大于 0 的主元列号（1-based）
+    if (info != nullptr)
+    {
+        *info = 0;
+    }
     SOLVER_ECHECK(m > 0 && n > 0 && lda > 0 && A != nullptr && ipiv != nullptr && info != nullptr,
                   "aclsolverCgetrf invalid param: m, n, lda <= 0, or A, ipiv, info is nullptr.",
                   ACL_ERROR_INVALID_PARAM);
     SOLVER_ECHECK(m <= INT32_MAX && n <= INT32_MAX, "aclsolverCgetrf invalid param: m or n exceeds int32 range.",
                   ACL_ERROR_INVALID_PARAM);
     SOLVER_ECHECK(m * n <= INT32_MAX, "aclsolverCgetrf invalid param: m * n exceeds INT32_MAX elements.",
+                  ACL_ERROR_INVALID_PARAM);
+    // kernel 的虚实分离/合并按 n<=8192 设计（SplitRealImag/MergeRealImag 一次
+    // 拷入缓冲为 8192 float，且入口注释设计上限 192MB），n 超限时 kernel 越界
+    // 写本地缓冲（issue #165），host 侧必须显式拒绝。
+    SOLVER_ECHECK(n <= LU_CGETRF_MAX_N, "aclsolverCgetrf invalid param: n exceeds the kernel design limit 8192.",
                   ACL_ERROR_INVALID_PARAM);
     SOLVER_ECHECK(
         lda == n,
@@ -129,8 +140,8 @@ aclError aclsolverCgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
 
     CHECK_ACLRT(aclrtGetHardwareSyncAddr((void **)&sync), cleanup());
 
-    cgetrf_kernel_do(sync, m, n, blockM, blockN, tileM, aMatrixDevice, aMatrixDeviceWork, wDevice, workDevice,
-                     gatherDevice1, gatherDevice2, gatherDevice3, numBlocks, stream);
+    cgetrf_kernel_do(sync, m, n, blockM, blockN, tileM, aMatrixDevice, aMatrixDeviceWork, wDevice, workDevice, gatherDevice1,
+                     gatherDevice2, gatherDevice3, numBlocks, stream);
     CHECK_ACLRT(aclrtSynchronizeStream(stream), cleanup());
 
     CHECK_ACLRT(aclrtMemcpy(aMatrixHost, aMatrixFileSize, aMatrixDevice, aMatrixFileSize, ACL_MEMCPY_DEVICE_TO_HOST),
@@ -141,6 +152,13 @@ aclError aclsolverCgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
     CHECK_ACLRT(aclrtMemcpy(wHost, wFileSize, wDevice, wFileSize, ACL_MEMCPY_DEVICE_TO_HOST), cleanup());
     for (int64_t i = 0; i < std::min(m, n); ++i)
     {
+        // W 主元哨兵初始化为 -1（0xFFFFFFFF），kernel 只回写真实主元行号；
+        // 残留哨兵说明该列主元为零（矩阵奇异），按 LAPACK 语义上报首个
+        // 奇异列号（1-based，issue #164）
+        if (info != nullptr && *info == 0 && wHostInt[i] == -1)
+        {
+            *info = static_cast<int32_t>(i + 1);
+        }
         ipiv[i] = wHostInt[i] + 1;  // Convert to 1-based indexing
     }
 

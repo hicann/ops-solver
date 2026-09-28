@@ -139,7 +139,7 @@ __aicore__ inline void custom_trsm(TBufPool<TPosition::VECCALC, 16> &tbufPool, M
 
     lGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ float *>(L));
 
-    int block_n = ceil((N + blockNum - 1) / blockNum, 64);
+    int block_n = LU_CEIL_ALIGN((N + blockNum - 1) / blockNum, 64);
     int trsmOffsetN = block_n * coreIdx;
     int realBlockN = min(N - trsmOffsetN, block_n);
 

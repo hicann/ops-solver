@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <iostream>
 #include <iterator>
+#include <stdexcept>
 #include <vector>
 
 #include "../utils/assert.h"
@@ -70,6 +71,12 @@ aclError CgetriBatchedImpl(aclsolverHandle_t handle, const int64_t n, std::compl
 aclError aclsolverCgetriBatched(aclsolverHandle_t handle, const int64_t n, std::complex<float> *A, const int64_t lda,
                                 std::complex<float> *Ainv, const int64_t lda_inv, int32_t *info, int64_t batchSize)
 {
+    // info 遵循 LAPACK 语义（issue #164）：成功为 0，参数错误由下方 ECHECK 以负值
+    // 语义返回（aclError）；奇异信息见各 kernel 主元哨兵约定
+    if (info != nullptr)
+    {
+        *info = 0;
+    }
     // 参数范围校验先于一切估算算术执行：体积估算的乘法仅在通过范围校验的 n/batchSize 上
     // 运行，消除大 n（约 1.75e9 以上）下 int64 有符号溢出 UB 与误导性报错（issue #139，
     // 检视意见：此前仅前移了校验到守卫 CHECK 之前，估算算术本身仍在校验前执行）
@@ -105,8 +112,10 @@ aclError aclsolverCgetriBatched(aclsolverHandle_t handle, const int64_t n, std::
     }
     catch (const std::bad_alloc &)
     {
+        // OOM 与参数错误分口径上报（issue #168）：bad_alloc 属运行时资源问题，
+        // 与同函数其他 std::exception 的 INTERNAL_ERROR 口径一致
         std::cerr << "CgetriBatched host allocation failed for n=" << n << " batchSize=" << batchSize << std::endl;
-        return ACL_ERROR_INVALID_PARAM;
+        return ACL_ERROR_INTERNAL_ERROR;
     }
     catch (const std::exception &e)
     {
@@ -143,7 +152,14 @@ aclError CgetriBatchedImpl(aclsolverHandle_t handle, const int64_t n, std::compl
     int64_t t = (std::min(M, N) + blockN - 1) / blockN * blockN;
     int64_t wEleNum = batchNum * t;
     std::vector<uint32_t> wBatchData(wEleNum, 0);
-    memset_s(wBatchData.data(), wEleNum * sizeof(uint32_t), -1, wEleNum * sizeof(uint32_t));
+    // 哨兵初始化失败必须中止（issue #167）：kernel 依赖 -1（0xFFFFFFFF）区分
+    // 未消元主元，残留 0 会被当作真实主元行号 0；口径对齐 cgetri_host 的 EOK 检查
+    if (memset_s(wBatchData.data(), wEleNum * sizeof(uint32_t), -1, wEleNum * sizeof(uint32_t)) != EOK)
+    {
+        // Impl 内 cleanup lambda 在下方才可见，此处以异常交由外层 catch 统一
+        // 上报 INTERNAL_ERROR（issue #167 口径：哨兵初始化失败必须中止）
+        throw std::runtime_error("CgetriBatched pivot sentinel memset_s failed");
+    }
 
     // 2、gen work data
     int64_t aMatWorkEleNum =
@@ -167,47 +183,18 @@ aclError CgetriBatchedImpl(aclsolverHandle_t handle, const int64_t n, std::compl
 
     int64_t strideN = (N + COL_ALIGNED_ELENUM - 1) / COL_ALIGNED_ELENUM * COL_ALIGNED_ELENUM;
 
-    int64_t idx1 = 0;
-    for (int64_t j = 0; j < blockN; ++j)
-    {
-        for (int64_t i = blockM - 1; i >= 0; --i)
-        {
-            gatherOffset1[idx1++] = static_cast<uint32_t>((i * blockN + j) * sizeof(float));
-        }
-    }
-    int64_t idx2 = 0;
-    for (int64_t i = blockM - 1; i >= 0; --i)
-    {
-        for (int64_t j = 0; j < blockN; ++j)
-        {
-            gatherOffset2[idx2++] = static_cast<uint32_t>((j * blockM + i) * sizeof(float));
-        }
-    }
-    // gather3 与 kernel 的 MergeRealImag 消费口径对齐：按 alignedN = ceil8(n) 展开偏移对，
-    // 而非未对齐的 n（issue #137；与 utils/lu_host_common.h 的共享实现同口径，issue #144）
-    int64_t idx3 = 0;
-    int64_t nn = std::min(N, TILE_LENGTH);
-    if (nn <= 0)
-    {
-        LOG_PRINT("CgetriBatched get invalid N for gather3, skip gather3 filling.\n");
-        nn = 0;
-    }
-    if (nn > 0)
-    {
-        const int64_t alignedNn = (nn + GATHER3_ALIGN - 1) / GATHER3_ALIGN * GATHER3_ALIGN;
-        const int64_t effN = alignedNn < TILE_LENGTH ? alignedNn : TILE_LENGTH;
-        const int64_t mm = TILE_LENGTH / effN;
-        for (int64_t i = 0; i < mm; ++i)
-        {
-            for (int64_t j = 0; j < effN; ++j)
-            {
-                gatherOffset3[idx3++] = static_cast<uint32_t>((i * effN + j) * sizeof(float));
-                gatherOffset3[idx3++] = static_cast<uint32_t>((i * effN + j + TILE_LENGTH) * sizeof(float));
-            }
-        }
-    }
+    // 三张 gather 重排表收敛为 utils 共享实现（issue #171，第 6 处拷贝归一）：
+    // gather1/gather2 语义与共享实现完全一致；gather3 共享实现含 n 非 8 倍数时
+    // 尾行补齐口径（issue #161 修复），批量场景逐 batch 调用（strideN/padded 为
+    // 每 batch 相同的 n 推导值）
     for (int64_t b = 0; b < batchNum; ++b)
     {
+        auto *g1 = reinterpret_cast<uint8_t *>(gatherOffset1.data());
+        auto *g2 = reinterpret_cast<uint8_t *>(gatherOffset2.data());
+        auto *g3 = reinterpret_cast<uint8_t *>(gatherOffset3.data());
+        // 共享实现 eyeBuf=nullptr 时为纯整数运算，无失败路径（见 lu_host_common.h 注释）
+        (void)GenerateGatherTables(tileM, blockN, N, strideN, N, g1, g2, g3, nullptr, EYE_FLOATS_PER_REAL_ELEMENT);
+        // 批量 eye：第 b 个 batch 的单位阵写入共享 eye 布局的对应平面
         for (int64_t i = 0; i < N; ++i)
         {
             eyeBatchMatData[b * eyeMatEleNum + i * (strideN + 1)] = 1.0f;
