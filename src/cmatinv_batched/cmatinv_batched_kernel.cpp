@@ -57,6 +57,7 @@ class CmatinvBatchedAIV
 
     __aicore__ inline void Process();
     __aicore__ inline void SingleProcess();
+    __aicore__ inline void PivotAndSwapRows(uint16_t pivotCol);
 
     __aicore__ inline void CopyCmatBatchGmToUb(LocalTensor<T> dst, GlobalTensor<T> src, uint32_t matColSize,
                                                uint32_t batchSize);
@@ -336,6 +337,61 @@ __aicore__ inline void CmatinvBatchedAIV<T>::Process()
 }
 
 template <typename T>
+__aicore__ inline void CmatinvBatchedAIV<T>::PivotAndSwapRows(uint16_t pivotCol)
+{
+    // Prior elimination steps update the matrix with vector instructions. Make
+    // those writes visible before selecting a pivot with scalar LocalTensor access.
+    PipeBarrier<PIPE_ALL>();
+
+    for (uint32_t batchIdx = 0; batchIdx < this->batchNumPerRepeat; batchIdx++)
+    {
+        const uint32_t matrixOffset = batchIdx * this->oneMatUbOffsetFp32;
+        uint32_t pivotRow = pivotCol;
+        float maxMagnitudeSquared = -1.0f;
+        for (uint16_t rowIdx = pivotCol; rowIdx < this->n; rowIdx++)
+        {
+            const uint32_t valueOffset = matrixOffset + rowIdx * this->alignedComplexMatSize + pivotCol;
+            const float real = this->matRealLocal.GetValue(valueOffset);
+            const float imag = this->matImagLocal.GetValue(valueOffset);
+            const float magnitudeSquared = real * real + imag * imag;
+            if (magnitudeSquared > maxMagnitudeSquared)
+            {
+                maxMagnitudeSquared = magnitudeSquared;
+                pivotRow = rowIdx;
+            }
+        }
+
+        if (pivotRow == pivotCol)
+        {
+            continue;
+        }
+
+        for (uint16_t colIdx = 0; colIdx < this->n; colIdx++)
+        {
+            const uint32_t pivotOffset = matrixOffset + pivotCol * this->alignedComplexMatSize + colIdx;
+            const uint32_t swapOffset = matrixOffset + pivotRow * this->alignedComplexMatSize + colIdx;
+
+            float tmp = this->matRealLocal.GetValue(pivotOffset);
+            this->matRealLocal.SetValue(pivotOffset, this->matRealLocal.GetValue(swapOffset));
+            this->matRealLocal.SetValue(swapOffset, tmp);
+            tmp = this->matImagLocal.GetValue(pivotOffset);
+            this->matImagLocal.SetValue(pivotOffset, this->matImagLocal.GetValue(swapOffset));
+            this->matImagLocal.SetValue(swapOffset, tmp);
+
+            tmp = this->invRealLocal.GetValue(pivotOffset);
+            this->invRealLocal.SetValue(pivotOffset, this->invRealLocal.GetValue(swapOffset));
+            this->invRealLocal.SetValue(swapOffset, tmp);
+            tmp = this->invImagLocal.GetValue(pivotOffset);
+            this->invImagLocal.SetValue(pivotOffset, this->invImagLocal.GetValue(swapOffset));
+            this->invImagLocal.SetValue(swapOffset, tmp);
+        }
+    }
+
+    // Make the scalar row swaps visible to the vector gather/elimination below.
+    PipeBarrier<PIPE_ALL>();
+}
+
+template <typename T>
 __aicore__ inline void CmatinvBatchedAIV<T>::SingleProcess()
 {
     // complex separation
@@ -346,6 +402,8 @@ __aicore__ inline void CmatinvBatchedAIV<T>::SingleProcess()
     PipeBarrier<PIPE_ALL>();
     for (uint16_t elementIdx = 0; elementIdx < this->n; elementIdx++)
     {
+        PivotAndSwapRows(elementIdx);
+
         // iterate diagonal elements
         // collect diagonal element, e.g., aii
         uint32_t preOffset = elementIdx * this->alignedComplexMatSize + elementIdx;
