@@ -62,6 +62,11 @@ typedef enum
         if (__ret != ACL_SUCCESS)                                                           \
         {                                                                                   \
             std::cerr << __FILE__ << ":" << __LINE__ << " aclError:" << __ret << std::endl; \
+            const char *__recent_msg = aclGetRecentErrMsg();                                \
+            if (__recent_msg != nullptr)                                                    \
+            {                                                                               \
+                std::cerr << "recent error message: " << __recent_msg << std::endl;         \
+            }                                                                               \
             return __ret;                                                                   \
         }                                                                                   \
     } while (0)

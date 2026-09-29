@@ -143,6 +143,7 @@ mkdir -p "${BUILD_DIR}"
 # 默认 SOC_VERSION，ASCEND_CANN_PACKAGE_PATH 使用环境变量
 if [ -z "${SOC_VERSION}" ]; then
     SOC_VERSION="ascend910b"
+    echo "[INFO] --soc 未指定，默认使用 ${SOC_VERSION}；可用 'npu-smi info' 查看芯片型号，取值说明见 docs/QUICKSTART.md"
 fi
 
 # 校验 SOC 是否在支持列表中（前缀匹配）
@@ -157,6 +158,7 @@ done
 if [ -z "${matched}" ]; then
     echo "Error: The soc [${SOC_VERSION}] is not supported."
     echo "Supported SOC: ${SUPPORT_COMPUTE_UNIT_SHORT[*]}"
+    echo "Hint: 可用 'npu-smi info' 查看芯片型号，--soc 取值说明见 docs/QUICKSTART.md"
     exit 1
 fi
 

@@ -88,6 +88,59 @@ bash build.sh --soc=ascend950 --ops=cmatinv_batched --run
 
 使用msprof工具进行性能采集，具体参考[CANN性能采集文档](https://www.hiascend.com/document/detail/zh/canncommercial/700/inferapplicationdev/aclcppdevg/aclcppdevg_0000.html)。
 
+## 四、常见问题排查
+
+### 1. 样例失败如何定位
+
+运行算子样例（`bash build.sh --soc=<soc> --ops=<op> --run` 或直接执行 `build/test/<op>/<op>_test`）失败时，按以下顺序定位：
+
+1. 先看退出时打印的错误码，对照下方"常见错误码"表；
+2. 设备类错误先检查环境（见"设备检查清单"）；
+3. 打开 CANN 日志重跑，获取设备侧详细报错（见"打开 CANN 日志"）；
+4. 仍未定位时，将完整错误码与日志提交到 [Issues](https://gitcode.com/cann/ops-solver/issues)。
+
+**常见错误码**：
+
+| 错误码 | 宏定义 | 含义 | 定位建议 |
+| --- | --- | --- | --- |
+| 107001 | ACL_ERROR_RT_INVALID_DEVICEID | 设备号无效 | 见下方"设备检查清单"，通常是设备不可见或设备号不存在 |
+| 107000 | ACL_ERROR_RT_PARAM_INVALID | 运行时参数无效 | 检查 API 入参 |
+| 100000 | ACL_ERROR_INVALID_PARAM | 接口参数非法 | 对照算子文档的"约束"（如 getri 族要求 n ≤ 8192） |
+| 507015 | ACL_ERROR_RT_AICORE_EXCEPTION | AI Core 执行异常（kernel 越界等） | 打开 plog 查看设备侧根因；确认输入满足算子约束 |
+| 507057 | ACL_ERROR_RT_SUSPECT_REMOTE_ERROR | 疑似远端错误（通常是其他根因的伴随错误） | 在 plog 中找**最早出现**的根因错误（常见伴随 507015） |
+
+**设备检查清单**（107001 等设备类错误）：
+
+- 执行 `npu-smi info`：能否看到芯片？看不到说明驱动未加载或容器未映射设备；
+- 容器场景：启动容器时需映射设备，可参考[环境部署](zh/install/quick_install.md)中 docker run 示例的 `--device=/dev/davinci*` 等参数；
+- 确认设备号：样例默认使用 device 0，若实际设备号不是 0，可在测试命令后追加设备号（如 `./build/test/cmatinv_batched/cmatinv_batched_test 1`），或通过 `ASCEND_RT_VISIBLE_DEVICES` 指定可见设备；
+- 确认驱动与 CANN 包版本配套（`cat /usr/local/Ascend/driver/version.info`）。
+
+### 2. --soc 应该填什么
+
+`--soc` 取值必须与硬件平台匹配，可用 `npu-smi info` 查看芯片型号后对照下表（未指定 `--soc` 时默认 `ascend910b`）：
+
+| 硬件平台 | --soc 取值 |
+| --- | --- |
+| Atlas A3 训练系列/推理系列（Ascend 910C，型号如 Ascend910_93xx） | `ascend910_93` |
+| Atlas A2 训练系列/推理系列（Ascend 910B，型号如 Ascend910Bxx） | `ascend910b` |
+| Ascend 950 系列（型号如 Ascend950PR_/Ascend950DT_） | `ascend950` |
+| Atlas 200I/500 A2 推理产品（Ascend 310P） | `ascend310p` |
+
+> **说明**：初代 Ascend 910A（Ascend910A/PremiumA/ProA 等）不在当前支持列表中；完整支持列表见 `build.sh` 中 `SUPPORT_COMPUTE_UNIT_SHORT`。
+
+### 3. 打开 CANN 日志
+
+样例只打印错误码、无法定位时，打开日志后重跑：
+
+```bash
+export ASCEND_GLOBAL_LOG_LEVEL=1        # 0=DEBUG 更详细，1=INFO
+export ASCEND_SLOG_PRINT_TO_STDOUT=1    # 日志直接打印到终端
+./build/test/<op>/<op>_test
+```
+
+日志同时落盘在 `~/ascend/log/plog`（root 用户为 `/root/ascend/log/plog`），按时间排序查看，重点关注**第一条** ERROR 记录。
+
 ---
 
 ## 算子开发实例
