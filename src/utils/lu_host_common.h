@@ -24,6 +24,9 @@ constexpr int64_t LU_BLOCK_N = 16;  // kernel 消元子块列宽
 // cgetrf kernel 设计上限：虚实分离/合并单次拷入缓冲 8192 float，入口注释
 // 设计规模 192MB（issue #165），host 校验 n 不超过该值
 constexpr int64_t LU_CGETRF_MAX_N = 8192;
+// cgetri/sgetri kernel 列暂存区容量上限：n 向上对齐 ROW_ALIGNED(16) 后由 kernel 本地
+// TILE_LENGTH=8192 缓冲承载，n > 8192 时越界并触发 device 异常（getrf 族同类限制）
+constexpr int64_t LU_MAX_GETRI_N = 8192;
 constexpr int64_t LU_TILE_M = 512;          // kernel tile 行高（gather1/gather2 重排表按 tileM*blockN 布局）
 constexpr int64_t LU_ROW_ALIGNED = 16;      // 行对齐粒度
 constexpr int64_t LU_COL_ALIGNED = 128;     // strideN 列对齐粒度

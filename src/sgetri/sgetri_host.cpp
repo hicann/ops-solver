@@ -44,6 +44,8 @@ aclError aclsolverSgetri(aclsolverHandle_t handle, const int64_t n, float *A, co
     SOLVER_ECHECK(n <= INT32_MAX, "aclsolverSgetri invalid param: n exceeds int32 range.", ACL_ERROR_INVALID_PARAM);
     SOLVER_ECHECK(n * n <= INT32_MAX, "aclsolverSgetri invalid param: n * n exceeds INT32_MAX elements.",
                   ACL_ERROR_INVALID_PARAM);
+    SOLVER_ECHECK(n <= LU_MAX_GETRI_N, "aclsolverSgetri invalid param: n exceeds the kernel design limit 8192.",
+                  ACL_ERROR_INVALID_PARAM);
     SOLVER_ECHECK(
         lda == n,
         "aclsolverSgetri only supports lda == n in current version, matrix A must be stored contiguously as n * n.",

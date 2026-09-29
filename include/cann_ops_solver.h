@@ -131,7 +131,7 @@ aclError aclsolverCgetriBatched(aclsolverHandle_t handle, const int64_t n, std::
  * @brief Inversion of a single complex matrix
  *
  * @param handle aclsolver handle created by aclsolverCreate
- * @param n order of the square matrix, must be positive
+ * @param n order of the square matrix, valid range [1, 8192]
  * @param A input matrix (typically LU factors from aclsolverCgetrf), COMPLEX64, contiguous n * n layout
  * @param lda leading dimension; current version requires lda == n
  * @param info result info; not written in current version
@@ -144,7 +144,7 @@ aclError aclsolverCgetri(aclsolverHandle_t handle, const int64_t n, std::complex
  * @brief Inversion of a single real float matrix
  *
  * @param handle aclsolver handle created by aclsolverCreate
- * @param n order of the square matrix, must be positive
+ * @param n order of the square matrix, valid range [1, 8192]
  * @param A input matrix (typically LU factors from aclsolverSgetrf), FLOAT32, contiguous n * n layout
  * @param lda leading dimension; current version requires lda == n
  * @param info result info; not written in current version
