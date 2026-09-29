@@ -24,8 +24,9 @@
 #include "acl/acl.h"
 #include "cann_ops_solver.h"
 
-extern void sgetrf_kernel_do(GM_ADDR sync, int orgM, int orgN, int blockN, int tileM, GM_ADDR A_org, GM_ADDR A_work, GM_ADDR W,
-                             GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm, uint32_t numBlocks, void *stream);
+extern void sgetrf_kernel_do(GM_ADDR sync, int orgM, int orgN, int blockN, int tileM, GM_ADDR A_org, GM_ADDR A_work,
+                             GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm, uint32_t numBlocks,
+                             void *stream);
 
 aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_t n, float *A, const int64_t lda,
                          int32_t *ipiv, int32_t *info)
@@ -42,6 +43,8 @@ aclError aclsolverSgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
     SOLVER_ECHECK(m <= INT32_MAX && n <= INT32_MAX, "aclsolverSgetrf invalid param: m or n exceeds int32 range.",
                   ACL_ERROR_INVALID_PARAM);
     SOLVER_ECHECK(m * n <= INT32_MAX, "aclsolverSgetrf invalid param: m * n exceeds INT32_MAX elements.",
+                  ACL_ERROR_INVALID_PARAM);
+    SOLVER_ECHECK(m <= LU_MAX_ROW, "aclsolverSgetrf invalid param: m exceeds the 8192-row kernel limit.",
                   ACL_ERROR_INVALID_PARAM);
     SOLVER_ECHECK(
         lda == n,

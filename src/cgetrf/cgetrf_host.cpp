@@ -25,9 +25,9 @@
 #include "acl/acl.h"
 #include "cann_ops_solver.h"
 
-extern void cgetrf_kernel_do(GM_ADDR sync, int orgM, int orgN, int blockM, int blockN, int tileM, GM_ADDR A_org, GM_ADDR A_work,
-                             GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm, GM_ADDR gather3_gm,
-                             uint32_t numBlocks, void *stream);
+extern void cgetrf_kernel_do(GM_ADDR sync, int orgM, int orgN, int blockM, int blockN, int tileM, GM_ADDR A_org,
+                             GM_ADDR A_work, GM_ADDR W, GM_ADDR work_gm, GM_ADDR gather1_gm, GM_ADDR gather2_gm,
+                             GM_ADDR gather3_gm, uint32_t numBlocks, void *stream);
 
 aclError aclsolverCgetrf(aclsolverHandle_t handle, const int64_t m, const int64_t n, std::complex<float> *A,
                          const int64_t lda, int32_t *ipiv, int32_t *info)
@@ -49,6 +49,8 @@ aclError aclsolverCgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
     // 拷入缓冲为 8192 float，且入口注释设计上限 192MB），n 超限时 kernel 越界
     // 写本地缓冲（issue #165），host 侧必须显式拒绝。
     SOLVER_ECHECK(n <= LU_CGETRF_MAX_N, "aclsolverCgetrf invalid param: n exceeds the kernel design limit 8192.",
+                  ACL_ERROR_INVALID_PARAM);
+    SOLVER_ECHECK(m <= LU_MAX_ROW, "aclsolverCgetrf invalid param: m exceeds the 8192-row kernel limit.",
                   ACL_ERROR_INVALID_PARAM);
     SOLVER_ECHECK(
         lda == n,
@@ -140,8 +142,8 @@ aclError aclsolverCgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
 
     CHECK_ACLRT(aclrtGetHardwareSyncAddr((void **)&sync), cleanup());
 
-    cgetrf_kernel_do(sync, m, n, blockM, blockN, tileM, aMatrixDevice, aMatrixDeviceWork, wDevice, workDevice, gatherDevice1,
-                     gatherDevice2, gatherDevice3, numBlocks, stream);
+    cgetrf_kernel_do(sync, m, n, blockM, blockN, tileM, aMatrixDevice, aMatrixDeviceWork, wDevice, workDevice,
+                     gatherDevice1, gatherDevice2, gatherDevice3, numBlocks, stream);
     CHECK_ACLRT(aclrtSynchronizeStream(stream), cleanup());
 
     CHECK_ACLRT(aclrtMemcpy(aMatrixHost, aMatrixFileSize, aMatrixDevice, aMatrixFileSize, ACL_MEMCPY_DEVICE_TO_HOST),

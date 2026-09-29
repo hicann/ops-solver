@@ -31,6 +31,7 @@ constexpr int64_t LU_TILE_M = 512;          // kernel tile 行高（gather1/gath
 constexpr int64_t LU_ROW_ALIGNED = 16;      // 行对齐粒度
 constexpr int64_t LU_COL_ALIGNED = 128;     // strideN 列对齐粒度
 constexpr int64_t EYE_ROW_PADDING = 128;    // eye/工作区行 padding 高度（行对齐之上追加）
+constexpr int64_t LU_MAX_ROW = 8192;        // getrf 列暂存区容量上限
 constexpr uint32_t LU_MAX_NUM_BLOCKS = 20;  // kernel 按固定 8+12 分块设计，block 数上限 20
 
 // gather3（实虚平面合并重排表）的工作 tile 逻辑长度：表项按 (src, src+4096) 偏移对组织

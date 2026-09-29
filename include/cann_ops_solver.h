@@ -79,13 +79,15 @@ extern "C"
 #endif
 
 /*! \brief Eigenvector computation mode for Hermitian eigensolver APIs. */
-typedef enum {
+typedef enum
+{
     ACLSOLVER_EIG_MODE_NOVECTOR = 0,
     ACLSOLVER_EIG_MODE_VECTOR = 1
 } aclsolverEigMode_t;
 
 /*! \brief Matrix triangle selection mode for Hermitian matrix inputs. */
-typedef enum {
+typedef enum
+{
     ACLSOLVER_FILL_MODE_LOWER = 0,
     ACLSOLVER_FILL_MODE_UPPER = 1
 } aclsolverFillMode_t;
@@ -156,7 +158,7 @@ aclError aclsolverSgetri(aclsolverHandle_t handle, const int64_t n, float *A, co
  * @brief LU decomposition of a single complex matrix (A = P * L * U)
  *
  * @param handle aclsolver handle created by aclsolverCreate
- * @param m rows of matrix A, must be positive
+ * @param m rows of matrix A, valid range [1, 8192]
  * @param n columns of matrix A, must be positive
  * @param A input/output matrix, COMPLEX64, contiguous m * n layout; holds L and U on return
  * @param lda leading dimension; current version requires lda == n
@@ -171,7 +173,7 @@ aclError aclsolverCgetrf(aclsolverHandle_t handle, const int64_t m, const int64_
  * @brief LU decomposition of a single real float matrix (A = P * L * U)
  *
  * @param handle aclsolver handle created by aclsolverCreate
- * @param m rows of matrix A, must be positive
+ * @param m rows of matrix A, valid range [1, 8192]
  * @param n columns of matrix A, must be positive
  * @param A input/output matrix, FLOAT32, contiguous m * n layout; holds L and U on return
  * @param lda leading dimension; current version requires lda == n

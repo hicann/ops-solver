@@ -75,7 +75,7 @@
     <tr>
         <td align="center">m</td>
         <td align="center">输入</td>
-        <td align="left">矩阵A的行数</td>
+        <td align="left">矩阵A的行数，范围为[1, 8192]</td>
     </tr>
     <tr>
         <td align="center">n</td>
