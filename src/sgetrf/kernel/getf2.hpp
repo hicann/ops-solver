@@ -126,13 +126,16 @@ class LUCustom1
         colLocal.SetValue(a, colLocal.GetValue(b));
         colLocal.SetValue(b, tmp);
     }
-    __aicore__ inline void Divide(int offset, int k, LocalTensor<T> &srcLocal)
+    __aicore__ inline void Divide(int offset, int k, LocalTensor<T>& srcLocal)
     {
         int32_t eventIDVToS = static_cast<int32_t>(GetTPipePtr()->FetchEventID(AscendC::HardEvent::V_S));
         AscendC::SetFlag<AscendC::HardEvent::V_S>(eventIDVToS);
         AscendC::WaitFlag<AscendC::HardEvent::V_S>(eventIDVToS);
-        T tmpScalar = T(1) / srcLocal.GetValue(offset + (blockM - 1 - k));
-        Muls(srcLocal[offset], srcLocal[offset], tmpScalar, blockM - k - 1);
+        const T pivot = srcLocal.GetValue(offset + (blockM - 1 - k));
+        LocalTensor<T> divisor = workBuf.Get<T>();
+        Duplicate(divisor, pivot, blockM - k - 1);
+        PipeBarrier<PIPE_V>();
+        Div(srcLocal[offset], srcLocal[offset], divisor, blockM - k - 1);
     }
     __aicore__ inline void elimimate(int srcOffset, int dstOffset, int k, LocalTensor<T> &srcLocal)
     {
@@ -398,8 +401,11 @@ class LUCustom3
     }
     __aicore__ inline void CopyOutColumn(int offset, int idx, int k)
     {
-        T tmpScalar = T(1) / colLocal[idx].GetValue(blockM - 1 - k);
-        Muls(colLocal[idx], colLocal[idx], tmpScalar, blockM - k - 1);
+        const T pivot = colLocal[idx].GetValue(blockM - 1 - k);
+        LocalTensor<T> divisor = workBuf.Get<T>();
+        Duplicate(divisor, pivot, blockM - k - 1);
+        PipeBarrier<PIPE_V>();
+        Div(colLocal[idx], colLocal[idx], divisor, blockM - k - 1);
         int32_t eventIDVToMTE3 = static_cast<int32_t>(GetTPipePtr()->FetchEventID(AscendC::HardEvent::V_MTE3));
         AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(eventIDVToMTE3);
         AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(eventIDVToMTE3);

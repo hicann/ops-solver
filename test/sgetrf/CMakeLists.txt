@@ -21,3 +21,17 @@ target_link_libraries(sgetrf_test PRIVATE
     ${OPS_SOLVER}
     $ENV{EAGER_LIBRARY_PATH}/libascendcl.so
 )
+
+add_executable(sgetrf_subnormal_pivot_test
+    sgetrf_subnormal_pivot_test.cpp
+)
+
+target_include_directories(sgetrf_subnormal_pivot_test PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    $ENV{LINUX_INCLUDE_PATH}
+)
+
+target_link_libraries(sgetrf_subnormal_pivot_test PRIVATE
+    ${OPS_SOLVER}
+    $ENV{EAGER_LIBRARY_PATH}/libascendcl.so
+)
