@@ -321,3 +321,25 @@ ops-solver提供类似cuSolver风格的C API接口，通过handle管理上下文
 | [`aclsolverSpotri`](zh/spotri.md) | 原地输出逆矩阵的指定三角 |
 | [`aclsolverSpotrfBatched`](zh/spotrf_batched.md) | Device 指针数组批量 Cholesky 分解 |
 | [`aclsolverSpotrsBatched`](zh/spotrs_batched.md) | Device 指针数组批量求解，仅支持单 RHS |
+
+
+## 状态码说明
+
+`aclsolverStatus_t`（`cann_ops_solver_common.h`）为 `aclsolverStatus_t` 系接口的统一返回状态：
+
+| 状态码 | 值 | 含义 |
+|--------|:--:|------|
+| `ACLSOLVER_STATUS_SUCCESS` | 0 | 执行成功 |
+| `ACLSOLVER_STATUS_NOT_INITIALIZED` | 1 | aclsolver 库未初始化 |
+| `ACLSOLVER_STATUS_ALLOC_FAILED` | 2 | 资源分配失败 |
+| `ACLSOLVER_STATUS_INVALID_VALUE` | 3 | 传入了不支持的数值/非法参数 |
+| `ACLSOLVER_STATUS_MAPPING_ERROR` | 4 | 内存空间访问失败 |
+| `ACLSOLVER_STATUS_EXECUTION_FAILED` | 5 | 程序执行失败（含 kernel 下发失败） |
+| `ACLSOLVER_STATUS_INTERNAL_ERROR` | 6 | aclsolver 内部操作失败 |
+| `ACLSOLVER_STATUS_NOT_SUPPORTED` | 7 | 功能未实现/形状超上限 |
+| `ACLSOLVER_STATUS_ARCH_MISMATCH` | 8 | 架构不匹配（如非 950 构建调用 950 专属接口） |
+| `ACLSOLVER_STATUS_HANDLE_IS_NULLPTR` | 9 | handle 为空指针 |
+| `ACLSOLVER_STATUS_INVALID_ENUM` | 10 | 传入了不支持的枚举值 |
+| `ACLSOLVER_STATUS_UNKNOWN` | 11 | 后端返回了不支持的状态码 |
+
+> 注意：`aclsolverCheevj` 与 `aclsolverSgetrs`/`Cgetrs` 等 Legacy 接口返回 `aclError`（ACL 错误域，如 `ACL_SUCCESS`/`ACL_ERROR_INVALID_PARAM`），与本表不同域。
