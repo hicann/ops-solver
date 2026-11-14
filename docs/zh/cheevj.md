@@ -55,6 +55,19 @@ aclError aclsolverCheevj(
 | `W` | 输出 | **Host 内存**输出，长度为 `n` 的 FLOAT32 升序特征值 |
 | `info` | 输出 | **Host 内存**输出：`0` 表示成功；负值表示参数非法（`-2` jobz、`-3` uplo、`-4` n、`-5` A、`-6` lda、`-7` W）；`-8` 为 kernel 侧 workspace 未分配的保留标记；`-9` Host 回退超出宿主内存预算、`-10` Host 分配失败、`-11` 其他宿主侧异常；正值表示数值求解未完成 |
 
+## 返回值
+
+函数返回 `aclError`（区别于本仓 950 C API 的 `aclsolverStatus_t`）：
+
+- `ACL_SUCCESS`：调用完成（包括数值失败经 `info` 正值上报的情形）；
+- `ACL_ERROR_INVALID_PARAM`：Host 侧参数校验失败（`info` 为 `-2`～`-7`，定位参数位置，`handle` 不计入编号），
+  或 Host 回退超出宿主内存预算（`info = -9`，非参数位置——预算上界见"数值计算执行路径"）；
+- `ACL_ERROR_INTERNAL_ERROR`：Host 分配失败（`info = -10`）、其他宿主侧异常（`info = -11`）
+  或设备资源查询/执行内部错误。
+
+返回成功不代表特征分解数值成功，须同步 stream 后读取 `info` 判定；
+`-9` 不是参数位置编号，不应按 `-i` 参数定位规则解读。
+
 枚举定义：
 
 ```cpp
