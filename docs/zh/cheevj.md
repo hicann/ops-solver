@@ -53,7 +53,7 @@ aclError aclsolverCheevj(
 | `A` | 输入/输出 | **Host 内存**缓冲：接口内部搬运至 Device（或按分发走 Host 回退）计算，返回前将特征向量写回；COMPLEX64、column-major；向量模式下原地输出特征向量 |
 | `lda` | 输入 | leading dimension，满足 `lda >= max(1, n)` |
 | `W` | 输出 | **Host 内存**输出，长度为 `n` 的 FLOAT32 升序特征值 |
-| `info` | 输出 | **Host 内存**输出：`0` 表示成功；负值表示参数非法（`-2` jobz、`-3` uplo、`-4` n、`-5` A、`-6` lda、`-7` W，另见头文件中 Host 回退相关负码）；正值表示数值求解未完成 |
+| `info` | 输出 | **Host 内存**输出：`0` 表示成功；负值表示参数非法（`-2` jobz、`-3` uplo、`-4` n、`-5` A、`-6` lda、`-7` W）；`-8` 为 kernel 侧 workspace 未分配的保留标记；`-9` Host 回退超出宿主内存预算、`-10` Host 分配失败、`-11` 其他宿主侧异常；正值表示数值求解未完成 |
 
 枚举定义：
 
