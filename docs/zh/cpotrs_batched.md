@@ -39,7 +39,7 @@ aclsolverStatus_t aclsolverCpotrsBatched(aclsolverHandle_t handle, aclsolverFill
 | Barray | 输入/输出 / device | 设备指针数组，各元素指向 n×1 的列主序 COMPLEX64 矩阵；矩阵原地更新为解，指针表不修改。 |
 | ldb | 输入 / host | int，B 的列间距，以复数元素计，至少为 max(1,n)；填充区保持不变。 |
 | info | 输出 / device | 一个 int；异步写入，在调用 stream 完成后读取。 |
-| batchSize | 输入 / host | int，0≤batchSize≤1000000。 |
+| batchSize | 输入 / host | int，0≤batchSize≤1000000；超限或负值返回 `ACLSOLVER_STATUS_INVALID_VALUE` 并写 `info` = -9（编号不计 handle）。 |
 
 ## 约束与状态
 

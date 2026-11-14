@@ -35,7 +35,7 @@ aclsolverStatus_t aclsolverCpotrfBatched(aclsolverHandle_t handle, aclsolverFill
 | Aarray | 输入/输出 / device | 设备指针数组，各元素为列主序 aclsolverFloatComplex 矩阵地址；支持独立分配。 |
 | lda | 输入 / host | int，A 的相邻两列起点间距，以复数元素计，至少为 max(1,n)；填充区保持不变。 |
 | infoArray | 输出 / device | 批量分解为 batchSize 个 int；参数错误仅写首元素，空批量仍需可写首元素。 |
-| batchSize | 输入 / host | int，0≤batchSize≤1000000。 |
+| batchSize | 输入 / host | int，0≤batchSize≤1000000；超限或负值返回 `ACLSOLVER_STATUS_INVALID_VALUE` 并写 `infoArray` 首元素 = -6（batchSize 为第 6 个非 handle 参数，与 `uplo,n,Aarray,lda,infoArray,batchSize` 编号枚举一致）。 |
 
 ## 约束与状态
 
