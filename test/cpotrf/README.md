@@ -9,6 +9,9 @@ Solver Cpotrf算子实现。
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品
 
+> 本样例测的是 [cpotrf 接口说明](../../docs/zh/cpotrf.md)中的 **A2/A3 C++ 接口**（6 参数、Host 缓冲契约、返回 `aclError`）。
+> Ascend 950 C API（8 参数、Device 缓冲契约、返回 `aclsolverStatus_t`）的样例在 [test/cpotrf_950](../cpotrf_950/README.md)。
+
 ## 目录结构介绍
 
 ```text
