@@ -33,7 +33,7 @@ aclsolverStatus_t aclsolverCpotrsBatched(aclsolverHandle_t handle, aclsolverFill
 | handle | 输入 / host | 由 aclsolverCreate 创建；使用其绑定的调用方 stream。 |
 | uplo | 输入 / host | ACLSOLVER_FILL_MODE_LOWER 或 ACLSOLVER_FILL_MODE_UPPER。 |
 | n | 输入 / host | int，矩阵阶数，0≤n≤4096。 |
-| nrhs | 输入 / host | int，n>0 且 batchSize>0 时必须为 1；空问题接受 0≤nrhs≤128。 |
+| nrhs | 输入 / host | int，n>0 且 batchSize>0 时必须为 1（违反返回 `ACLSOLVER_STATUS_INVALID_VALUE` 并写 `info = -3`，编号不计 handle）；空问题接受 0≤nrhs≤128。 |
 | Aarray | 输入 / device | 只读设备指针数组，各元素为只读的列主序 aclsolverFloatComplex 矩阵地址；支持独立分配。 |
 | lda | 输入 / host | int，A 的相邻两列起点间距，以复数元素计，至少为 max(1,n)；填充区保持不变。 |
 | Barray | 输入/输出 / device | 设备指针数组，各元素指向 n×1 的列主序 COMPLEX64 矩阵；矩阵原地更新为解，指针表不修改。 |
