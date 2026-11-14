@@ -19,13 +19,13 @@ Ascend 950PR/Ascend 950DT 共用 dav-3510 / arch35 实现，构建入口均为 `
 设备缓冲区可复用此存储布局；host 对象应复制分量或按值转换，不能通过无关类型解引用。
 矩阵为列主序；`ACLSOLVER_FILL_MODE_LOWER=0`、`UPPER=1`。
 
-| 接口 | 输入与输出 |
-| --- | --- |
-| `aclsolverCpotrf` | 读取 A 的所选三角，原地生成 L 或 U；对角虚部为零 |
-| `aclsolverCpotrs` | 读取 L 或 U，保持 A 不变，原地更新 B；支持 0≤nrhs≤128 |
-| `aclsolverCpotri` | 读取 L 或 U，原地生成原矩阵逆的所选三角 |
-| `aclsolverCpotrfBatched` | Aarray 为设备上的指针数组，info 为逐矩阵设备数组 |
-| `aclsolverCpotrsBatched` | Aarray、Barray 为设备指针数组，非空批量仅支持 nrhs=1，info 为设备标量 |
+| 计算接口 | 查询接口 | 输入与输出 |
+| --- | --- | --- |
+| `aclsolverCpotrf` | `aclsolverCpotrf_bufferSize` | 读取 A 的所选三角，原地生成 L 或 U；对角虚部为零 |
+| `aclsolverCpotrs` | 无 | 读取 L 或 U，保持 A 不变，原地更新 B；支持 0≤nrhs≤128 |
+| `aclsolverCpotri` | `aclsolverCpotri_bufferSize` | 读取 L 或 U，原地生成原矩阵逆的所选三角 |
+| `aclsolverCpotrfBatched` | 无 | Aarray 为设备上的指针数组，info 为逐矩阵设备数组 |
+| `aclsolverCpotrsBatched` | 无 | Aarray、Barray 为设备指针数组，非空批量仅支持 nrhs=1，info 为设备标量 |
 
 支持 0≤n≤4096、0≤batchSize≤1000000，以及非连续批量矩阵。
 各维度上限独立；输入、输出和内部工作区的总量还必须满足实际可用 HBM。
