@@ -36,7 +36,7 @@ aclsolverStatus_t aclsolverCgetriBatched(
 | `Carray` | Device，输出地址 | 长度为 `batchSize` 的 Device 指针数组，每项指向独立输出矩阵 |
 | `ldc` | Host，输入 | `ldc ≥ max(1, n)`；每个输出矩阵至少 `ldc * n` 个复数元素 |
 | `infoArray` | Device，输出 | 长度为 `batchSize` 的 `int` 数组，每个矩阵分别写状态 |
-| `batchSize` | Host，输入 | `0 ≤ batchSize ≤ 1000000` |
+| `batchSize` | Host，输入 | `0 ≤ batchSize ≤ 1000000`；超限或负值返回 `ACLSOLVER_STATUS_INVALID_VALUE` 并写 `infoArray[0]` = -8（batchSize 为第 8 个非 handle 参数，ErrorInfoCount 对负值/超限仅写首槽） |
 
 ## 数据与状态约定
 

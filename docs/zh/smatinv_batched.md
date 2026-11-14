@@ -102,7 +102,7 @@
     <tr>
         <td align="center">batchSize</td>
         <td align="center">输入</td>
-        <td align="left">矩阵数量，Host int，batchSize≥0 且 ≤10000000，超过返回参数错误；实际容量仍受可用设备内存限制</td>
+        <td align="left">矩阵数量，Host int，batchSize≥0 且 ≤10000000；超限或负值返回 `ACLSOLVER_STATUS_INVALID_VALUE` 并写 info = -7（batchSize 为第 7 个非 handle 参数；超限写全部 batchSize 个槽位，负 batchSize 仅写首槽——数量未知无法确定数组长度）；实际容量仍受可用设备内存限制</td>
     </tr>
     </table>
 

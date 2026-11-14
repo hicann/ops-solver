@@ -34,7 +34,7 @@ aclsolverStatus_t aclsolverCmatinvBatched(
 | `Ainv` | Device，输出地址 | 长度为 `batchSize` 的 Device 指针数组，每项指向独立输出矩阵 |
 | `lda_inv` | Host，输入 | `lda_inv ≥ max(1, n)`；每个输出矩阵至少 `lda_inv * n` 个复数元素 |
 | `info` | Device，输出 | 长度为 `batchSize` 的 `int` 数组，每个矩阵分别写状态 |
-| `batchSize` | Host，输入 | `0 ≤ batchSize ≤ 10000000` |
+| `batchSize` | Host，输入 | `0 ≤ batchSize ≤ 10000000`；超限或负值返回 `ACLSOLVER_STATUS_INVALID_VALUE` 并写 `info[0]` = -7（batchSize 为第 7 个非 handle 参数，ErrorInfoCount 对负值/超限仅写首槽） |
 
 ## 数据与状态约定
 
