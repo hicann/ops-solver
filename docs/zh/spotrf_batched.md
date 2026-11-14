@@ -39,7 +39,7 @@ aclsolverStatus_t aclsolverSpotrfBatched(
 | `Aarray` | 输入/输出 | Device 指针数组，含 `batchSize` 个 Device `float*`；每个矩阵按列主序存放至少 `lda*n` 个元素；只修改矩阵，不修改指针槽位 |
 | `lda` | 输入 | 每个矩阵的列跨度（float 元素数），`lda >= max(1,n)` |
 | `infoArray` | 输出 | Device `int*`，含 `batchSize` 个状态值 |
-| `batchSize` | 输入 | 非负 `int`，可执行规模受实际内存资源约束 |
+| `batchSize` | 输入 | 非负 `int`，可执行规模受实际内存资源约束；`batchSize < 0` 返回 `ACLSOLVER_STATUS_INVALID_VALUE` 并写 `infoArray` 首槽 = -6（编号不计 handle） |
 
 ## 返回值
 
