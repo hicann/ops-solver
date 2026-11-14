@@ -126,6 +126,22 @@
 - 调用实现
     使用内核调用符<<<>>>调用核函数。
 
+## 返回值
+
+两个入口均返回 `aclsolverStatus_t`：
+
+| 返回值 | 触发条件 |
+|---|---|
+| `ACLSOLVER_STATUS_SUCCESS` | 查询返回 Lwork 或 Q 生成已提交；不代表异步数值一定成功（devInfo 须同步后读取） |
+| `ACLSOLVER_STATUS_HANDLE_IS_NULLPTR` | 仅主入口：handle 为 nullptr |
+| `ACLSOLVER_STATUS_INVALID_VALUE` | 参数非法（`lwork` 为 nullptr、`CheckShape` 形状不满足、lwork 小于查询值等；主入口另写 `devInfo = -i`，handle 不计入编号） |
+| `ACLSOLVER_STATUS_NOT_SUPPORTED` | m 超过当前 kernel 上限 ORGQR_MAX_ROWS（见 m 参数行，两入口同口径） |
+| `ACLSOLVER_STATUS_INTERNAL_ERROR` | 仅主入口：平台资源查询失败（核数为 0 等） |
+| `ACLSOLVER_STATUS_EXECUTION_FAILED` | 仅主入口：kernel 下发后线程级错误 |
+| `ACLSOLVER_STATUS_MAPPING_ERROR` | 仅主入口：WriteInfo 写 device info 失败 |
+
+`_bufferSize` 显式 `(void)handle`（尺寸查询与 handle/stream 无关，sorgqr_host.cpp:120），handle 为空仍可查询成功；其无 devInfo 参数，参数错误仅以返回码表达。
+
 ## 调用示例
 - 完整代码示例：[aclsolverSorgqr示例](../../test/sorgqr/sorgqr_test.cpp)
 - 核心调用步骤：
