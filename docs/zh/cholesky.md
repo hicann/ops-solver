@@ -27,6 +27,20 @@ Ascend 950PR/Ascend 950DT 共用 dav-3510 / arch35 实现，构建入口均为 `
 | `aclsolverCpotrfBatched` | 无 | Aarray 为设备上的指针数组，info 为逐矩阵设备数组 |
 | `aclsolverCpotrsBatched` | 无 | Aarray、Barray 为设备指针数组，非空批量仅支持 nrhs=1，info 为设备标量 |
 
+各接口的 workspace 归属：
+
+| 接口 | workspace |
+|---|---|
+| `aclsolverCpotrf_bufferSize` | 查询，返回所需 aclsolverFloatComplex 元素个数 |
+| `aclsolverCpotrf` | 调用者提供 |
+| `aclsolverCpotrs` | 句柄内部复用 |
+| `aclsolverCpotri_bufferSize` | 查询，返回所需 aclsolverFloatComplex 元素个数 |
+| `aclsolverCpotri` | 调用者提供 |
+| `aclsolverCpotrfBatched` | 句柄内部复用 |
+| `aclsolverCpotrsBatched` | 句柄内部复用 |
+
+`Cpotrf/Cpotri` 的 Lwork 单位是 aclsolverFloatComplex 元素，使用对应 bufferSize 返回值分配，不能当作字节数。
+
 支持 0≤n≤4096、0≤batchSize≤1000000，以及非连续批量矩阵。
 各维度上限独立；输入、输出和内部工作区的总量还必须满足实际可用 HBM。
 合法维度组合不代表设备必有足够容量，内部工作区分配失败返回 `ACLSOLVER_STATUS_ALLOC_FAILED`。
