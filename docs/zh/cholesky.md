@@ -158,7 +158,8 @@ typedef enum {
 | 返回值 | 含义 |
 |---|---|
 | `ACLSOLVER_STATUS_SUCCESS` | 查询完成或计算已提交；不代表异步数值计算一定成功 |
-| `ACLSOLVER_STATUS_HANDLE_IS_NULLPTR` | 句柄为空，不写 Device info |
+| `ACLSOLVER_STATUS_HANDLE_IS_NULLPTR` | 实数族句柄为空，不写 Device info |
+| `ACLSOLVER_STATUS_NOT_INITIALIZED` | 复数族句柄为空（utils/cholesky/cholesky.h 的 QueryWorkspace 与 Finish 对 `!handle` 统一返回本码），不写 Device info |
 | `ACLSOLVER_STATUS_ARCH_MISMATCH` | 当前库为非 950 SOC 构建；不访问矩阵或改写输出 |
 | `ACLSOLVER_STATUS_INVALID_VALUE` | 参数不满足对应接口约束 |
 | `ACLSOLVER_STATUS_ALLOC_FAILED` | 需要内部缓冲区时资源分配失败 |
