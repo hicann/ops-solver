@@ -8,7 +8,7 @@
 
 | 组件 | 仓库内路径 | 许可证 | 许可证全文 / 声明文件 | 版权人与商用联系 |
 |------|-----------|--------|----------------------|------------------|
-| PACO GEQRF（I/O 高效并行 QR 分解参考实现，经适配进入本仓） | `src/cgeqrf/`（`cgeqrf_host.cpp`、`cgeqrf_kernel.cpp`、`cgeqrf_launchers.hpp` 及 `kernel/*.hpp`）；`test/cgeqrf/`（`cgeqrf_test.cpp`、`CMakeLists.txt`） | GPL-3.0-or-later / 商业双许可（默认条款 GPL-3.0-or-later） | 仓库根目录 `COPYING-PACO`（GPL 全文）、`LICENSE-PACO`（双许可声明） | Shina Guo <fs20091003@163.com>、Yuan Tang <yuantang@fudan.edu.cn> |
+| PACO GEQRF（I/O 高效并行 QR 分解参考实现，经适配进入本仓） | `src/cgeqrf/`（`cgeqrf_host.cpp`、`cgeqrf_kernel.cpp`、`cgeqrf_launchers.hpp` 及 `kernel/*.hpp`）；`test/cgeqrf/`（`cgeqrf_test.cpp`、`CMakeLists.txt`、`data/gen_data.py`、`data/verify_result.py`） | GPL-3.0-or-later / 商业双许可（默认条款 GPL-3.0-or-later） | 仓库根目录 `COPYING-PACO`（GPL 全文）、`LICENSE-PACO`（双许可声明） | Shina Guo <fs20091003@163.com>、Yuan Tang <yuantang@fudan.edu.cn> |
 
 仓库其余源码均为 CANN Open Software License Agreement Version 2.0（见根目录
 `LICENSE`）。
