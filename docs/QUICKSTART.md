@@ -58,6 +58,12 @@ Self-extractable archive "cann-950-ops-solver_9.0.0_linux-x86_64.run" successful
 仅当安装时显式指定了 `--install-path=<路径>`，卸载才需要传入同一路径（如 `--install-path=/opt/MyAscend`），否则卸载会在默认路径找不到本包清单。
 卸载仅移除本包安装的头文件与 `libops_solver*.so` 库文件，不影响 CANN toolkit 与驱动。
 
+安装后，用户工程按以下布局消费（以默认路径为例）：
+
+- 头文件：`/usr/local/Ascend/cann/include/cann_ops_solver.h`、`cann_ops_solver_common.h`（编译加 `-I/usr/local/Ascend/cann/include`）；
+- 库文件：`/usr/local/Ascend/cann/lib64/libops_solver.so`（950 构建另有 `libcholesky_simt.so` 运行时依赖，与主库同目录，链接加 `-L/usr/local/Ascend/cann/lib64 -lops_solver`）；
+- 运行时库查找：`export LD_LIBRARY_PATH=/usr/local/Ascend/cann/lib64:$LD_LIBRARY_PATH`（或使用 rpath）。
+
 ### 3. 快速验证：运行算子样例
 
 通用的运行命令格式：`bash build.sh --soc=${soc_version} --ops=<算子名> --run`。
