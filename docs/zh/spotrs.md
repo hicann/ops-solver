@@ -35,7 +35,7 @@ aclsolverStatus_t aclsolverSpotrs(
 | 参数 | 输入/输出 | 内存位置及说明 |
 |:---|:---:|:---|
 | `handle` | 输入 | 由 `aclsolverCreate` 创建并关联计算流的句柄 |
-| `uplo` | 输入 | 指定 A 中 L 或 U 所在三角，须与分解时一致 |
+| `uplo` | 输入 | `ACLSOLVER_FILL_MODE_LOWER` 或 `ACLSOLVER_FILL_MODE_UPPER`（枚举 0/1，仅此二值），指定 A 中 L 或 U 所在三角，须与分解时一致 |
 | `n` | 输入 | 矩阵阶数，`0 <= n <= 4096`；超限返回 `ACLSOLVER_STATUS_INVALID_VALUE` |
 | `nrhs` | 输入 | 右端项列数，`0 <= nrhs <= 128`；超限返回 `ACLSOLVER_STATUS_INVALID_VALUE` 并写 `info = -3` |
 | `A` | 输入 | Device FLOAT32 因子，列主序 `A[i+j*lda]`，至少 `lda*n` 个元素 |

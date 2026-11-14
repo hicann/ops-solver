@@ -38,7 +38,7 @@ aclsolverStatus_t aclsolverSpotri(
 | 参数 | 输入/输出 | 内存位置及说明 |
 |:---|:---:|:---|
 | `handle` | 输入 | 由 `aclsolverCreate` 创建并关联计算流的句柄 |
-| `uplo` | 输入 | 指定输入因子和输出逆矩阵所在三角，须与分解时一致 |
+| `uplo` | 输入 | `ACLSOLVER_FILL_MODE_LOWER` 或 `ACLSOLVER_FILL_MODE_UPPER`（枚举 0/1，仅此二值），指定输入因子和输出逆矩阵所在三角，须与分解时一致 |
 | `n` | 输入 | 矩阵阶数，`0 <= n <= 4096` |
 | `A` | 输入/输出 | Device FLOAT32，列主序 `A[i+j*lda]`，至少 `lda*n` 个元素；查询接口不修改 A |
 | `lda` | 输入 | 相邻两列起始地址之间的 float 元素数，`lda >= max(1,n)` |
