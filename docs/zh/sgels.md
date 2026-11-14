@@ -123,6 +123,11 @@
         <td align="left">dX 的 leading dimension，需满足 lddx >= max(1, n)</td>
     </tr>
     <tr>
+        <td align="center">dwork</td>
+        <td align="center">—</td>
+        <td align="left">仅存在于 _bufferSize 签名，为接口形状兼容保留，不读取或写入，可传 nullptr</td>
+    </tr>
+    <tr>
         <td align="center">dWorkspace</td>
         <td align="center">输入</td>
         <td align="left">device 侧 workspace，字节数不少于 lwork_bytes</td>
