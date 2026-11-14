@@ -173,6 +173,19 @@
 - 调用实现
     使用内核调用符<<<>>>调用核函数。
 
+## 返回值
+
+两个入口均返回 `aclsolverStatus_t`；本接口**没有 devInfo 输出**，参数错误只通过返回值上报。`_bufferSize` 显式 `(void)handle`（尺寸查询与 handle/stream 无关，xlarft_host.cpp:116），handle 为空仍可查询成功；其 workspace/buffer 检查仅在主入口（INVALID_VALUE 差异项见上表）：
+
+| 返回值 | 触发条件 |
+|---|---|
+| `ACLSOLVER_STATUS_SUCCESS` | 查询返回 workspace 尺寸或 T 生成已提交 |
+| `ACLSOLVER_STATUS_HANDLE_IS_NULLPTR` | 仅主入口：handle 为 nullptr |
+| `ACLSOLVER_STATUS_INVALID_VALUE` | 参数非法（params 非空、direct/storev 取值非法、n<0/k<0/n<k、ldv/ldt 不足、四 dataType 非 FLOAT32；主入口另有 bufferOnDevice 为空或 workspace 不足） |
+| `ACLSOLVER_STATUS_NOT_SUPPORTED` | n > 4096 或 k > 256（两入口同口径，在尺寸推导前早退） |
+| `ACLSOLVER_STATUS_INTERNAL_ERROR` | 仅主入口：平台信息获取失败、AIC 核数为 0 或不足以放下 T 的行 |
+| `ACLSOLVER_STATUS_EXECUTION_FAILED` | 仅主入口：kernel 下发后线程级错误 |
+
 ## 调用示例
 - 完整代码示例：[aclsolverXlarft示例](../../test/xlarft/xlarft_test.cpp)
 - 核心调用步骤：
