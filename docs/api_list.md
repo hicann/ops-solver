@@ -283,7 +283,7 @@ ops-solver提供类似cuSolver风格的C API接口，通过handle管理上下文
 | `aclsolverCCgels` / `aclsolverCCgels_bufferSize` | 复数最小二乘及工作区查询 |
 | `aclsolverSgetrs` | 单精度线性方程组求解 |
 | `aclsolverCgetrs` | 复数线性方程组求解（C ABI，复数形参为 aclFloatComplex） |
-| `aclsolverCpotrf` | 复数矩阵Cholesky分解 |
+| `aclsolverCpotrf` | 复数矩阵Cholesky分解；A2/A3（返回 `aclError` 的 Host 缓冲契约）与 Ascend 950（返回 `aclsolverStatus_t` 的 Device 缓冲契约）使用不同原型，详见[接口说明](zh/cpotrf.md) |
 
 ### 复数 LU/求逆接口迁移
 
