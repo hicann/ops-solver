@@ -6,8 +6,9 @@ Solver Cgetri算子实现。
 
 ## 支持的产品
 
-- Atlas A3 训练系列产品/Atlas A3 推理系列产品
-- Atlas A2 训练系列产品/Atlas A2 推理系列产品
+- Ascend 950PR / Ascend 950DT
+
+本测试通过 `test/utils/complex_solver_test.h` 驱动 `aclsolverStatus_t` 新接口，仅在 ascend950 构建注册；接口契约见 [Cgetri](../../docs/zh/cgetri.md)。
 
 ## 目录结构介绍
 
