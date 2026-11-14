@@ -256,33 +256,33 @@ ops-solver提供类似cuSolver风格的C API接口，通过handle管理上下文
 
 | 接口 | 说明 |
 |------|------|
-| `aclsolverCgetrf_bufferSize` | LU工作空间查询，Host输出复数元素数 |
-| `aclsolverCgetrf` | 复数矩阵LU分解，Device列主序 |
-| `aclsolverCgetri_bufferSize` | 求逆工作空间查询，Host输出复数元素数 |
-| `aclsolverCgetri` | 从LU及主元原地求逆，Device列主序 |
-| `aclsolverSgetrf_bufferSize` | 单矩阵LU分解workspace查询，返回FLOAT32元素数 |
-| `aclsolverSgetrf` | 单精度实数矩阵LU分解，Device列主序 |
+| [aclsolverCgetrf_bufferSize](zh/cgetrf.md) | LU工作空间查询，Host输出复数元素数 |
+| [aclsolverCgetrf](zh/cgetrf.md) | 复数矩阵LU分解，Device列主序 |
+| [aclsolverCgetri_bufferSize](zh/cgetri.md) | 求逆工作空间查询，Host输出复数元素数 |
+| [aclsolverCgetri](zh/cgetri.md) | 从LU及主元原地求逆，Device列主序 |
+| [aclsolverSgetrf_bufferSize](zh/sgetrf.md) | 单矩阵LU分解workspace查询，返回FLOAT32元素数 |
+| [aclsolverSgetrf](zh/sgetrf.md) | 单精度实数矩阵LU分解，Device列主序 |
 | [`aclsolverSpotrf`](zh/spotrf.md) | 单精度 Cholesky 分解；A2/A3 与 Ascend 950 使用不同原型，详见接口说明 |
-| `aclsolverSgeqrf` | 单精度矩阵QR分解 |
-| `aclsolverSgeqrf_bufferSize` | 单精度矩阵 QR 分解 workspace 查询（FLOAT32 元素数） |
-| `aclsolverSorgqr` / `aclsolverSorgqr_bufferSize` | 显式生成正交矩阵 Q 及工作空间查询 |
-| `aclsolverSormqr` / `aclsolverSormqr_bufferSize` | 正交变换乘法及工作空间查询 |
-| `aclsolverXlarft` / `aclsolverXlarft_bufferSize` | 块反射子三角因子 T 生成及工作空间查询（字节） |
-| `aclsolverSSgels` / `aclsolverSSgels_bufferSize` | 单精度线性最小二乘求解及工作空间查询（字节） |
-| `aclsolverCgeqrf` | A2/A3 复数矩阵QR分解（七参数 C++ 接口） |
-| `aclsolverSgetri_bufferSize` | 单矩阵求逆workspace查询，返回FLOAT32元素数 |
-| `aclsolverSgetri` | 单精度实数矩阵求逆，输入LU和主元 |
-| `aclsolverSgetriBatched` | 单精度实数批量求逆，输入LU和主元 |
-| `aclsolverSmatinvBatched` | 单精度实数小矩阵直接批量求逆，n≤32 |
-| `aclsolverCmatinvBatched` | 原始复数小矩阵直接批量求逆，n≤32，Device指针数组 |
-| `aclsolverCgetriBatched` | 从LU及主元批量求逆，Device指针数组 |
-| `aclsolverCheevj` | 单精度复数Hermitian矩阵特征值分解 |
-| `aclsolverCgeqrf` / `aclsolverCgeqrf_bufferSize` | 950 复数 QR 分解及工作区查询（C 接口） |
-| `aclsolverCungqr` / `aclsolverCungqr_bufferSize` | 显式 Q 构造及工作区查询 |
-| `aclsolverCunmqr` / `aclsolverCunmqr_bufferSize` | 酉变换及工作区查询 |
-| `aclsolverCCgels` / `aclsolverCCgels_bufferSize` | 复数最小二乘及工作区查询 |
-| `aclsolverSgetrs` | 单精度线性方程组求解 |
-| `aclsolverCgetrs` | 复数线性方程组求解（C ABI，复数形参为 aclFloatComplex） |
+| [aclsolverSgeqrf](zh/sgeqrf.md) | 单精度矩阵QR分解 |
+| [aclsolverSgeqrf_bufferSize](zh/sgeqrf.md) | 单精度矩阵 QR 分解 workspace 查询（FLOAT32 元素数） |
+| [aclsolverSorgqr](zh/sorgqr.md) / [aclsolverSorgqr_bufferSize](zh/sorgqr.md) | 显式生成正交矩阵 Q 及工作空间查询 |
+| [aclsolverSormqr](zh/sormqr.md) / [aclsolverSormqr_bufferSize](zh/sormqr.md) | 正交变换乘法及工作空间查询 |
+| [aclsolverXlarft](zh/xlarft.md) / [aclsolverXlarft_bufferSize](zh/xlarft.md) | 块反射子三角因子 T 生成及工作空间查询（字节） |
+| [aclsolverSSgels](zh/sgels.md) / [aclsolverSSgels_bufferSize](zh/sgels.md) | 单精度线性最小二乘求解及工作空间查询（字节） |
+| [aclsolverCgeqrf](zh/cgeqrf.md) | A2/A3 复数矩阵QR分解（七参数 C++ 接口） |
+| [aclsolverSgetri_bufferSize](zh/sgetri.md) | 单矩阵求逆workspace查询，返回FLOAT32元素数 |
+| [aclsolverSgetri](zh/sgetri.md) | 单精度实数矩阵求逆，输入LU和主元 |
+| [aclsolverSgetriBatched](zh/sgetri_batched.md) | 单精度实数批量求逆，输入LU和主元 |
+| [aclsolverSmatinvBatched](zh/smatinv_batched.md) | 单精度实数小矩阵直接批量求逆，n≤32 |
+| [aclsolverCmatinvBatched](zh/cmatinv_batched.md) | 原始复数小矩阵直接批量求逆，n≤32，Device指针数组 |
+| [aclsolverCgetriBatched](zh/cgetri_batched.md) | 从LU及主元批量求逆，Device指针数组 |
+| [aclsolverCheevj](zh/cheevj.md) | 单精度复数Hermitian矩阵特征值分解 |
+| [aclsolverCgeqrf](zh/cgeqrf.md) / [aclsolverCgeqrf_bufferSize](zh/cgeqrf.md) | 950 复数 QR 分解及工作区查询（C 接口） |
+| [aclsolverCungqr](zh/cungqr.md) / [aclsolverCungqr_bufferSize](zh/cungqr.md) | 显式 Q 构造及工作区查询 |
+| [aclsolverCunmqr](zh/cunmqr.md) / [aclsolverCunmqr_bufferSize](zh/cunmqr.md) | 酉变换及工作区查询 |
+| [aclsolverCCgels](zh/ccgels.md) / [aclsolverCCgels_bufferSize](zh/ccgels.md) | 复数最小二乘及工作区查询 |
+| [aclsolverSgetrs](zh/sgetrs.md) | 单精度线性方程组求解 |
+| [aclsolverCgetrs](zh/cgetrs.md) | 复数线性方程组求解（C ABI，复数形参为 aclFloatComplex） |
 | `aclsolverCpotrf` | 复数矩阵Cholesky分解；A2/A3（返回 `aclError` 的 Host 缓冲契约）与 Ascend 950（返回 `aclsolverStatus_t` 的 Device 缓冲契约）使用不同原型，详见[接口说明](zh/cpotrf.md) |
 
 ### 复数 LU/求逆接口迁移
@@ -299,13 +299,13 @@ ops-solver提供类似cuSolver风格的C API接口，通过handle管理上下文
 
 | 接口 | 说明 |
 | --- | --- |
-| `aclsolverCpotrf_bufferSize` | 查询分解工作区的复数元素数 |
-| `aclsolverCpotrf` | 原地 Cholesky 分解 |
-| `aclsolverCpotrs` | 因子只读，B 原地更新为解 |
-| `aclsolverCpotri_bufferSize` | 查询求逆工作区的复数元素数 |
-| `aclsolverCpotri` | 因子原地更新为逆矩阵的所选三角 |
-| `aclsolverCpotrfBatched` | 批量分解，逐矩阵 info |
-| `aclsolverCpotrsBatched` | 批量单右端项求解，单个参数 info |
+| [aclsolverCpotrf_bufferSize](zh/cpotrf.md) | 查询分解工作区的复数元素数 |
+| [aclsolverCpotrf](zh/cpotrf.md) | 原地 Cholesky 分解 |
+| [aclsolverCpotrs](zh/cpotrs.md) | 因子只读，B 原地更新为解 |
+| [aclsolverCpotri_bufferSize](zh/cpotri.md) | 查询求逆工作区的复数元素数 |
+| [aclsolverCpotri](zh/cpotri.md) | 因子原地更新为逆矩阵的所选三角 |
+| [aclsolverCpotrfBatched](zh/cpotrf_batched.md) | 批量分解，逐矩阵 info |
+| [aclsolverCpotrsBatched](zh/cpotrs_batched.md) | 批量单右端项求解，单个参数 info |
 
 上述接口使用 Device 列主序矩阵；主线 C++ `aclsolverCpotrf` 重载使用 Host 行主序矩阵。
 完整参数及使用约束见[Cholesky 接口说明](zh/cholesky.md)和[两种分解接口的说明](zh/cpotrf.md)。
