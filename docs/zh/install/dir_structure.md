@@ -65,3 +65,5 @@
 ```
 
 当前 `src/` 下共 28 个子目录：27 个算子能力目录——`ccgels`、`cgeqrf`、`cgetrf`、`cgetri`、`cgetri_batched`、`cgetrs`、`cheevj`、`cholesky`、`cmatinv_batched`、`cpotrf`、`cpotrf_batched`、`cpotri`、`cpotrs`、`cpotrs_batched`、`cungqr`、`cunmqr`、`sgels`、`sgeqrf`、`sgetrf`、`sgetri`、`sgetri_batched`、`sgetrs`、`smatinv_batched`、`sorgqr`、`sormqr`、`spotrf`、`xlarft`，另有公共实现目录 `utils`（随版本迭代可能增减，以仓库实际目录为准）。
+
+注意：`aclsolverSpotrf`（A2/A3 旧版）、`aclsolverSpotrs`、`aclsolverSpotri`、`aclsolverSpotrfBatched`、`aclsolverSpotrsBatched` 中除 `spotrf` 目录承载 A2/A3 旧版实现外，Ascend 950 的实数 Cholesky 五接口（Spotrf 950 版/Spotrs/Spotri/两 Batched）由 `cholesky` 目录实现（源码与测试共用该目录）；同理复数 `cpotrf`/`cpotrs`/`cpotri`/批量接口由 `cpotrf`/`cpotrs`/`cpotri`/`cpotrf_batched`/`cpotrs_batched` 各自目录承载。
