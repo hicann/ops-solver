@@ -145,7 +145,7 @@
     <tr>
         <td align="center">dinfo</td>
         <td align="center">输出</td>
-        <td align="left">device 侧 int32：成功写 0，第 i 个参数非法写 -i（handle 不计入）<br>允许传 nullptr</td>
+        <td align="left">device 侧 int32：成功写 0，第 i 个参数非法写 -i（handle 不计入）<br><strong>不可为 nullptr</strong>（dinfo 为空返回 ACLSOLVER_STATUS_INVALID_VALUE，dinfo = -13）</td>
     </tr>
     </table>
 
