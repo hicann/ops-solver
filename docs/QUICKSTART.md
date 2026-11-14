@@ -51,6 +51,13 @@ Self-extractable archive "cann-950-ops-solver_9.0.0_linux-x86_64.run" successful
 ./build_out/cann-950-ops-solver_9.0.0_linux-x86_64.run --install --quiet
 ```
 
+卸载使用同一 run 包的 `--uninstall` 参数，默认路径行为与安装一致（root 用户 `/usr/local/Ascend`、普通用户 `~/Ascend`），与上方安装示例配套时无需传参：
+```bash
+./build_out/cann-950-ops-solver_9.0.0_linux-x86_64.run --uninstall --quiet
+```
+仅当安装时显式指定了 `--install-path=<路径>`，卸载才需要传入同一路径（如 `--install-path=/opt/MyAscend`），否则卸载会在默认路径找不到本包清单。
+卸载仅移除本包安装的头文件与 `libops_solver*.so` 库文件，不影响 CANN toolkit 与驱动。
+
 ### 3. 快速验证：运行算子样例
 
 通用的运行命令格式：`bash build.sh --soc=${soc_version} --ops=<算子名> --run`。
