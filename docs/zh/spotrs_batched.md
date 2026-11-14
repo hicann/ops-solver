@@ -56,7 +56,7 @@ Device 数组内任一 A 槽位为空时 info=-4，否则任一 B 槽位为空�
 
 ## 算子约束
 
-- 仅支持 FLOAT32，有效计算（`n>0 && batchSize>0`）仅支持单 RHS，`nrhs=0` 也非法。
+- 仅支持 FLOAT32，有效计算（`n>0 && batchSize>0`）仅支持单 RHS：此时 `nrhs != 1`（含 `nrhs=0`）返回 `ACLSOLVER_STATUS_INVALID_VALUE` 并写 `info = -3`（`nrhs` 为第 3 参数，编号不计 handle）；`n` 超出 `[0, 4096]` 同返回 `ACLSOLVER_STATUS_INVALID_VALUE` 并写 `info = -2`；`batchSize < 0` 写 `info = -9`。
 - 空问题（`n=0` 或 `batchSize=0`）允许非负 nrhs、空 Aarray/Barray；
   仍须满足 `lda/ldb >= max(1,n)` 并提供 Device info，成功时写 0。
 - 有效计算要求每个指针槽位有效，各输出向量相互独立且不与因子、指针数组和 info 重叠。
